@@ -14,7 +14,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
 
   final _doctorsByDepartment = const {
     '호흡기내과': ['김현우 교수', '이수민 교수'],
-    '외과': ['박지훈 교수', '최유진 교수'],
+    '외과': ['박지훈 교수', '노유진 교수'],
   };
 
   final _timeSlots = const [
