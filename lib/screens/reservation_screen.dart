@@ -41,6 +41,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
     final selectedDoctors = _doctorsByDepartment[_selectedDepartment] ?? [];
     final displayDate = _selectedDate == null
         ? '예약 날짜를 선택하세요'
@@ -60,7 +61,12 @@ class _ReservationScreenState extends State<ReservationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('예약 정보 입력', style: theme.textTheme.titleMedium),
+              Text(
+                '예약 정보 입력',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 12),
               _buildFormCard(
                 context: context,
@@ -71,10 +77,9 @@ class _ReservationScreenState extends State<ReservationScreen> {
                     children: [
                       DropdownButtonFormField<String>(
                         value: _selectedDepartment,
-                        decoration: const InputDecoration(
-                          labelText: '진료과',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: _inputDecoration('진료과'),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        dropdownColor: Colors.white,
                         items: _departments
                             .map(
                               (dept) => DropdownMenuItem(
@@ -95,10 +100,9 @@ class _ReservationScreenState extends State<ReservationScreen> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         value: _selectedDoctor,
-                        decoration: const InputDecoration(
-                          labelText: '담당 의료진',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: _inputDecoration('담당 의료진'),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        dropdownColor: Colors.white,
                         items: selectedDoctors
                             .map(
                               (doctor) => DropdownMenuItem(
@@ -119,10 +123,10 @@ class _ReservationScreenState extends State<ReservationScreen> {
                         onTap: _handleDatePick,
                         child: AbsorbPointer(
                           child: TextFormField(
-                            decoration: const InputDecoration(
-                              labelText: '예약 날짜',
-                              border: OutlineInputBorder(),
-                              suffixIcon: Icon(Icons.calendar_today_outlined),
+                            decoration: _inputDecoration('예약 날짜').copyWith(
+                              suffixIcon: const Icon(
+                                Icons.calendar_today_outlined,
+                              ),
                             ),
                             controller: TextEditingController(
                               text: displayDate,
@@ -146,20 +150,19 @@ class _ReservationScreenState extends State<ReservationScreen> {
                             onSelected: (_) {
                               setState(() => _selectedTimeSlot = slot);
                             },
-                            selectedColor: theme.colorScheme.primary
-                                .withOpacity(0.15),
+                            selectedColor: accent,
                             labelStyle: TextStyle(
                               color: selected
-                                  ? theme.colorScheme.primary
+                                  ? Colors.white
                                   : const Color(0xFF1E2432),
-                              fontWeight: selected ? FontWeight.w600 : null,
+                              fontWeight: FontWeight.w600,
                             ),
-                            backgroundColor: const Color(0xFFF8FAFC),
+                            backgroundColor: const Color(0xFFF1F5FB),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(
                                 color: selected
-                                    ? theme.colorScheme.primary
+                                    ? accent
                                     : const Color(0xFFE2E8F0),
                               ),
                             ),
@@ -207,6 +210,8 @@ class _ReservationScreenState extends State<ReservationScreen> {
                 child: ElevatedButton(
                   onPressed: _handleSubmit,
                   style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -219,6 +224,30 @@ class _ReservationScreenState extends State<ReservationScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 1.4,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 
