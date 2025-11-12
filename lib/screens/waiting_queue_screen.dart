@@ -15,6 +15,13 @@ class WaitingQueueScreen extends StatelessWidget {
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: theme.textTheme.headlineMedium?.color,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: '새로고침',
+            onPressed: () {},
+            icon: Icon(Icons.refresh_rounded, color: accent),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -57,9 +64,38 @@ class _QueueSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final waitingCount = patients.length;
-    final currentPatient = patients.isNotEmpty ? patients.first : null;
-    final remaining = waitingCount > 0 ? waitingCount - 1 : 0;
+    if (waitingCount == 0) {
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Center(
+          child: Text(
+            '현재 대기 환자가 없습니다',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final current = patients.first;
+    final remaining = waitingCount - 1;
+
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -71,147 +107,71 @@ class _QueueSummary extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
-      child: currentPatient == null
-          ? Row(
-              children: [
-                Container(
-                  height: 58,
-                  width: 58,
-                  decoration: BoxDecoration(
-                    color: accent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Icon(
-                    Icons.people_alt_outlined,
-                    color: accent,
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '현재 대기 환자 없음',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '잠시 후 다시 확인해주세요.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF667085),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  height: 82,
-                  width: 82,
-                  decoration: BoxDecoration(
-                    color: accent.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '1',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontSize: 44,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '현재 나의 순서',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF475467),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Text(
-                            currentPatient.name,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: accent,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFE5E0),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              '방문 예정',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFFCC5F5F),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '대기 번호 ${currentPatient.queueNumber.toString().padLeft(3, '0')}번',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF475467),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '전체 ${waitingCount}명 중 현재 1번째 · 다음까지 ${remaining}명 대기 중',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF667085),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('새로고침'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ],
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '현재 나의 순서',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF475467),
+              fontWeight: FontWeight.w600,
             ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  current.queueNumber.toString(),
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w900,
+                    color: accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${current.queueNumber}번째',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '대기 번호 ${current.queueNumber.toString().padLeft(3, '0')}번',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF475467),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '전체 $waitingCount명 · 다음까지 $remaining명 남음',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
