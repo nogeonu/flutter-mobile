@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'doctorsearch.dart';
 
 void main() {
   runApp(const HospitalNaviApp());
@@ -237,40 +238,49 @@ class _FeatureCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 48,
-            width: 48,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
+    return InkWell(
+      onTap: () {
+        if (feature.title == '진료과 · 의료진') {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => DoctorSearchMobile()),
+          );
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
             ),
-            child: Icon(
-              feature.icon,
-              color: theme.colorScheme.primary,
-              size: 26,
+          ],
+        ),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                feature.icon,
+                color: theme.colorScheme.primary,
+                size: 26,
+              ),
             ),
-          ),
-          const Spacer(),
-          Text(feature.title, style: theme.textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text(feature.description, style: theme.textTheme.bodyMedium),
-        ],
+            const Spacer(),
+            Text(feature.title, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(feature.description, style: theme.textTheme.bodyMedium),
+          ],
+        ),
       ),
     );
   }
