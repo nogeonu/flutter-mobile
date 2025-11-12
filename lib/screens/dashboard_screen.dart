@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../data/feature_item.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/greeting_card.dart';
+import 'doctor_search_screen.dart';
 import 'hospital_map_screen.dart';
+import 'medical_history_screen.dart';
+import 'parking_screen.dart';
 import 'reservation_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -49,15 +52,30 @@ class DashboardScreen extends StatelessWidget {
 
   void _handleFeatureTap(BuildContext context, FeatureItem feature) {
     switch (feature.id) {
+      case 'department_staff':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const DoctorSearchScreen()));
+        break;
       case 'hospital_map':
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const HospitalMapScreen()));
         break;
       case 'reservation':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ReservationScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ReservationScreen()));
+        break;
+      case 'parking':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ParkingScreen()));
+        break;
+      case 'exam_history':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const MedicalHistoryScreen()));
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
