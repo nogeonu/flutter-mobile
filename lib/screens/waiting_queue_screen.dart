@@ -143,7 +143,7 @@ class _QueueSummary extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${current.queueNumber}번째',
+                      '번째',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
