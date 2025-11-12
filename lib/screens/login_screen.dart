@@ -32,22 +32,22 @@ class _LoginScreenState extends State<LoginScreen> {
           left: 24,
           right: 24,
           top: 32,
-          bottom: MediaQuery.of(context).padding.bottom + 24,
+          bottom: MediaQuery.of(context).padding.bottom + 6,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('로그인', style: theme.textTheme.headlineMedium),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
-              '씨디쎈셜 서비스 이용을 위해 로그인해 주세요.',
+              'CDSSentials 서비스 이용을 위해 로그인해 주세요.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 28),
             _LoginField(
               controller: _emailController,
-              label: '이메일',
-              hintText: 'example@hospital.com',
+              label: '계정 ID',
+              hintText: '아이디를 입력하세요',
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 18),
@@ -94,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(onPressed: () {}, child: const Text('비밀번호 찾기')),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -136,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Expanded(child: Divider(color: Colors.black.withOpacity(0.08))),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
             SocialLoginButton(
               icon: Icons.account_circle_outlined,
               label: '간편 인증으로 로그인',

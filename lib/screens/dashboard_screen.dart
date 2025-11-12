@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/feature_item.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/greeting_card.dart';
+import 'hospital_map_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -33,12 +34,36 @@ class DashboardScreen extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 final feature = featureItems[index];
-                return FeatureCard(feature: feature);
+                return FeatureCard(
+                  feature: feature,
+                  onTap: () => _handleFeatureTap(context, feature),
+                );
               },
             ),
           ),
         ],
       ),
     );
+  }
+
+  void _handleFeatureTap(BuildContext context, FeatureItem feature) {
+    switch (feature.id) {
+      case 'hospital_map':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const HospitalMapScreen()));
+        break;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${feature.title} 기능은 준비 중입니다.',
+              textAlign: TextAlign.center,
+            ),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
   }
 }
