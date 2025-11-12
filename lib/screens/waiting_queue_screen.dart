@@ -92,7 +92,6 @@ class _QueueSummary extends StatelessWidget {
     }
 
     final current = patients.first;
-    final remaining = waitingCount - 1;
 
     return Container(
       width: double.infinity,
@@ -150,7 +149,6 @@ class _QueueSummary extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 8),
                     Text(
                       '대기 번호 ${current.queueNumber.toString().padLeft(3, '0')}번',
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -160,7 +158,7 @@ class _QueueSummary extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '전체 $waitingCount명 · 다음까지 $remaining명 남음',
+                      '전체 $waitingCount명 대기 중',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: const Color(0xFF667085),
                       ),
