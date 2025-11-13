@@ -7,8 +7,10 @@ import 'doctor_search_screen.dart';
 import 'hospital_map_screen.dart';
 import 'medical_history_screen.dart';
 import 'parking_screen.dart';
+import 'pharmacy_screen.dart';
 import 'reservation_screen.dart';
 import 'waiting_queue_screen.dart';
+import 'hospital_navigation_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -63,6 +65,11 @@ class DashboardScreen extends StatelessWidget {
           context,
         ).push(MaterialPageRoute(builder: (_) => const HospitalMapScreen()));
         break;
+      case 'hospital_navigation':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const HospitalNavigationScreen()),
+        );
+        break;
       case 'reservation':
         Navigator.of(
           context,
@@ -72,6 +79,11 @@ class DashboardScreen extends StatelessWidget {
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const ParkingScreen()));
+        break;
+      case 'pharmacy':
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PharmacyScreen()),
+        );
         break;
       case 'exam_history':
         Navigator.of(
