@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/social_login_button.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -25,25 +26,26 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 32,
-          bottom: MediaQuery.of(context).padding.bottom + 6,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('로그인', style: theme.textTheme.headlineMedium),
-            const SizedBox(height: 10),
-            Text(
-              'CDSSentials 서비스 이용을 위해 로그인해 주세요.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 28),
+    return Scaffold(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 32,
+            bottom: MediaQuery.of(context).padding.bottom + 6,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('로그인', style: theme.textTheme.headlineMedium),
+              const SizedBox(height: 10),
+              Text(
+                'CDSSentials 서비스 이용을 위해 로그인해 주세요.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 28),
             _LoginField(
               controller: _emailController,
               label: '계정 ID',
@@ -122,7 +124,16 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text('처음 방문하셨나요?', style: theme.textTheme.bodyMedium),
-                TextButton(onPressed: () {}, child: const Text('회원가입')),
+                TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SignupScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('회원가입')),
               ],
             ),
             const SizedBox(height: 24),
@@ -142,7 +153,8 @@ class _LoginScreenState extends State<LoginScreen> {
               label: '간편 인증으로 로그인',
               onTap: () {},
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
