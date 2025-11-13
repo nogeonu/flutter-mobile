@@ -12,7 +12,7 @@ class MapConfig {
 
   /// 병원 기본 정보
   static const hospitalName = '건양대학교병원';
-  static const hospitalAddress = '대전 서구 관저동 176-1';
-  static const hospitalLatitude = 36.353704;
-  static const hospitalLongitude = 127.424936;
+  static const hospitalAddress = '대전 서구 관저동로 158';
+  static const hospitalLatitude = 36.3067114406784;
+  static const hospitalLongitude = 127.342630292942;
 }

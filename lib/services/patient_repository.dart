@@ -96,4 +96,29 @@ class PatientRepository {
     }
     throw ApiException(500, '환자 정보 수정에 실패했습니다.');
   }
+
+  /// 회원가입
+  Future<Map<String, dynamic>> signup({
+    required String accountId,
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+  }) async {
+    final response = await _client.post(
+      '/api/patients/signup/',
+      body: {
+        'account_id': accountId,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'password': password,
+      },
+    );
+
+    if (response is Map<String, dynamic>) {
+      return response;
+    }
+    throw ApiException(500, '회원가입에 실패했습니다.');
+  }
 }

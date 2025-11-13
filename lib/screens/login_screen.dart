@@ -7,6 +7,7 @@ import '../services/patient_repository.dart';
 import '../state/app_state.dart';
 import '../widgets/social_login_button.dart';
 import 'patient_profile_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -299,7 +300,14 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text('처음 방문하셨나요?', style: theme.textTheme.bodyMedium),
-                TextButton(onPressed: () {}, child: const Text('회원가입')),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SignupScreen()),
+                    );
+                  },
+                  child: const Text('회원가입'),
+                ),
               ],
             ),
             const SizedBox(height: 24),
