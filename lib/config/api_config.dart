@@ -3,10 +3,10 @@ class ApiConfig {
 
   /// `flutter run --dart-define=USE_LOCAL_BACKEND=true` 로 실행하면 로컬 백엔드로 전환됩니다.
   static const bool _useLocalBackend =
-      bool.fromEnvironment('USE_LOCAL_BACKEND', defaultValue: false);
+      bool.fromEnvironment('USE_LOCAL_BACKEND', defaultValue: true);
 
-  static const String _localBaseUrl = 'http://127.0.0.1:8000';
-  static const String _remoteBaseUrl = 'http://34.42.223.43:8000';
+  static const String _localBaseUrl = 'http://192.168.41.140:8000'; // Wi-Fi 네트워크 IP
+  static const String _remoteBaseUrl = 'http://34.42.223.43:8000'; // GCP 서버 (현재 중지됨)
 
   static String get baseUrl =>
       _useLocalBackend ? _localBaseUrl : _remoteBaseUrl;
