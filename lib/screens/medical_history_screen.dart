@@ -1,6 +1,11 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../models/medical_record.dart';
+import '../services/patient_repository.dart';
+import '../state/app_state.dart';
 
 class MedicalHistoryScreen extends StatefulWidget {
   const MedicalHistoryScreen({super.key});
@@ -10,7 +15,7 @@ class MedicalHistoryScreen extends StatefulWidget {
 }
 
 class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
-  final List<_Visit> _visits = _mockVisits;
+  final PatientRepository _repository = PatientRepository();
   final List<_HistoryFilter> _filters = const [
     _HistoryFilter(range: HistoryRange.today, label: '오늘'),
     _HistoryFilter(range: HistoryRange.month1, label: '1개월'),
@@ -19,54 +24,63 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
     _HistoryFilter(range: HistoryRange.custom, label: '직접설정'),
   ];
 
+  List<MedicalRecord> _records = const [];
+  bool _isLoading = false;
+  String? _errorMessage;
   HistoryRange _selectedRange = HistoryRange.month1;
   DateTimeRange? _customRange;
-  final Set<String> _expandedVisitIds = {};
+  final Set<int> _expandedRecordIds = {};
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final groupedVisits = _groupVisits(_filteredVisits);
+  void initState() {
+    super.initState();
+    AppState.instance.addListener(_handleAppStateChanged);
+    _loadRecords();
+  }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('진료내역 조회'),
-        backgroundColor: theme.scaffoldBackgroundColor,
-        foregroundColor: theme.textTheme.headlineMedium?.color,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _HistoryFilterBar(
-              filters: _filters,
-              selectedRange: _selectedRange,
-              customRange: _customRange,
-              onSelected: _handleFilterSelected,
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: groupedVisits.isEmpty
-                  ? _EmptyHistoryState(rangeLabel: _selectedRangeLabel)
-                  : ListView.builder(
-                      itemCount: groupedVisits.length,
-                      itemBuilder: (context, index) {
-                        final entry = groupedVisits.entries.elementAt(index);
-                        return _DateSection(
-                          dateLabel: entry.key,
-                          visits: entry.value,
-                          expandedVisitIds: _expandedVisitIds,
-                          onToggle: _toggleExpansion,
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    AppState.instance.removeListener(_handleAppStateChanged);
+    super.dispose();
+  }
+
+  void _handleAppStateChanged() {
+    if (!mounted) return;
+    _loadRecords();
+  }
+
+  Future<void> _loadRecords() async {
+    final session = AppState.instance.session;
+    if (session == null) {
+      setState(() {
+        _records = const [];
+        _errorMessage = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final records = await _repository.fetchMedicalRecords(session.patientId);
+      records.sort((a, b) => b.receptionStartTime.compareTo(a.receptionStartTime));
+      setState(() {
+        _records = records;
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _handleFilterSelected(HistoryRange range) async {
@@ -108,18 +122,18 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
     });
   }
 
-  void _toggleExpansion(String visitId, bool isExpanded) {
+  void _toggleExpansion(int recordId, bool expanded) {
     setState(() {
-      if (isExpanded) {
-        _expandedVisitIds.add(visitId);
+      if (expanded) {
+        _expandedRecordIds.add(recordId);
       } else {
-        _expandedVisitIds.remove(visitId);
+        _expandedRecordIds.remove(recordId);
       }
     });
   }
 
-  List<_Visit> get _filteredVisits {
-    DateTime now = DateTime.now();
+  List<MedicalRecord> get _filteredRecords {
+    final now = DateTime.now();
     DateTime? start;
     DateTime? end;
 
@@ -129,27 +143,15 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
         end = start.add(const Duration(days: 1));
         break;
       case HistoryRange.month1:
-        start = DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ).subtract(const Duration(days: 30));
+        start = now.subtract(const Duration(days: 30));
         end = now.add(const Duration(days: 1));
         break;
       case HistoryRange.month3:
-        start = DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ).subtract(const Duration(days: 90));
+        start = now.subtract(const Duration(days: 90));
         end = now.add(const Duration(days: 1));
         break;
       case HistoryRange.month6:
-        start = DateTime(
-          now.year,
-          now.month,
-          now.day,
-        ).subtract(const Duration(days: 180));
+        start = now.subtract(const Duration(days: 180));
         end = now.add(const Duration(days: 1));
         break;
       case HistoryRange.custom:
@@ -159,28 +161,29 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
             _customRange!.start.month,
             _customRange!.start.day,
           );
-          end = DateTime(
-            _customRange!.end.year,
-            _customRange!.end.month,
-            _customRange!.end.day,
-          ).add(const Duration(days: 1));
+          end = _customRange!.end.add(const Duration(days: 1));
         }
         break;
     }
 
-    return _visits.where((visit) {
-      final visitDate = visit.dateTime;
+    return _records.where((record) {
+      final visitDate = record.receptionStartTime;
       if (start != null && visitDate.isBefore(start)) return false;
       if (end != null && visitDate.isAfter(end)) return false;
       return true;
-    }).toList()..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+    }).toList();
   }
 
-  LinkedHashMap<String, List<_Visit>> _groupVisits(List<_Visit> visits) {
-    final Map<String, List<_Visit>> grouped = {};
-    for (final visit in visits) {
-      final key = _formatDate(visit.dateTime);
-      grouped.putIfAbsent(key, () => []).add(visit);
+  LinkedHashMap<String, List<MedicalRecord>> _groupRecords(
+    List<MedicalRecord> records,
+  ) {
+    final grouped = <String, List<MedicalRecord>>{};
+    for (final record in records) {
+      final key = DateFormat(
+        'yyyy년 M월 d일 (E)',
+        'ko_KR',
+      ).format(record.receptionStartTime);
+      grouped.putIfAbsent(key, () => []).add(record);
     }
     return LinkedHashMap.of(grouped);
   }
@@ -188,9 +191,102 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
   String get _selectedRangeLabel {
     final filter = _filters.firstWhere((f) => f.range == _selectedRange);
     if (_selectedRange == HistoryRange.custom && _customRange != null) {
-      return '${_formatShortDate(_customRange!.start)} ~ ${_formatShortDate(_customRange!.end)}';
+      final start = DateFormat('M월 d일').format(_customRange!.start);
+      final end = DateFormat('M월 d일').format(_customRange!.end);
+      return '$start ~ $end';
     }
     return filter.label;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final session = AppState.instance.session;
+    final groupedRecords = _groupRecords(_filteredRecords);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('진료내역 조회'),
+        backgroundColor: theme.scaffoldBackgroundColor,
+        foregroundColor: theme.textTheme.headlineMedium?.color,
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _HistoryFilterBar(
+              filters: _filters,
+              selectedRange: _selectedRange,
+              customRange: _customRange,
+              onSelected: _handleFilterSelected,
+            ),
+            const SizedBox(height: 20),
+            if (session == null)
+              Expanded(
+                child: _EmptyHistoryState(
+                  rangeLabel: _selectedRangeLabel,
+                  description: '로그인 후 진료내역을 확인하실 수 있습니다.',
+                ),
+              )
+            else if (_isLoading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else if (_errorMessage != null)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 56,
+                        color: theme.colorScheme.error,
+                      ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          _errorMessage!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: _loadRecords,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('다시 시도'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (groupedRecords.isEmpty)
+              Expanded(
+                child: _EmptyHistoryState(rangeLabel: _selectedRangeLabel),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  itemCount: groupedRecords.length,
+                  itemBuilder: (context, index) {
+                    final entry = groupedRecords.entries.elementAt(index);
+                    return _DateSection(
+                      dateLabel: entry.key,
+                      records: entry.value,
+                      expandedRecordIds: _expandedRecordIds,
+                      onToggle: _toggleExpansion,
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -249,219 +345,6 @@ class _HistoryFilterBar extends StatelessWidget {
   }
 }
 
-class _DateSection extends StatelessWidget {
-  const _DateSection({
-    required this.dateLabel,
-    required this.visits,
-    required this.expandedVisitIds,
-    required this.onToggle,
-  });
-
-  final String dateLabel;
-  final List<_Visit> visits;
-  final Set<String> expandedVisitIds;
-  final void Function(String visitId, bool isExpanded) onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.calendar_month_outlined,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    dateLabel,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...visits.map(
-                (visit) => _VisitExpansionTile(
-                  visit: visit,
-                  isExpanded: expandedVisitIds.contains(visit.id),
-                  onToggle: (value) => onToggle(visit.id, value),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VisitExpansionTile extends StatelessWidget {
-  const _VisitExpansionTile({
-    required this.visit,
-    required this.isExpanded,
-    required this.onToggle,
-  });
-
-  final _Visit visit;
-  final bool isExpanded;
-  final ValueChanged<bool> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F6FB),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          key: PageStorageKey(visit.id),
-          initiallyExpanded: isExpanded,
-          onExpansionChanged: onToggle,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          childrenPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 10,
-          ),
-          trailing: Icon(
-            isExpanded
-                ? Icons.keyboard_arrow_up_rounded
-                : Icons.keyboard_arrow_down_rounded,
-            color: const Color(0xFF475467),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  _formatTime(visit.dateTime),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      visit.department,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      visit.doctor,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF667085),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(left: 4, top: 6),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.local_hospital_outlined,
-                  size: 16,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    visit.location,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF475467),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          expandedCrossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _InfoRow(
-              icon: Icons.info_outline,
-              label: '진료 상태',
-              value: visit.statusLabel,
-            ),
-            const SizedBox(height: 8),
-            _InfoRow(
-              icon: Icons.description_outlined,
-              label: '진단',
-              value: visit.diagnosis,
-            ),
-            if (visit.notes.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                '메모',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF475467),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: visit.notes
-                    .map(
-                      (note) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '· $note',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF667085),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _InfoRow extends StatelessWidget {
   const _InfoRow({
     required this.icon,
@@ -507,10 +390,244 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
+class _DateSection extends StatelessWidget {
+  const _DateSection({
+    required this.dateLabel,
+    required this.records,
+    required this.expandedRecordIds,
+    required this.onToggle,
+  });
+
+  final String dateLabel;
+  final List<MedicalRecord> records;
+  final Set<int> expandedRecordIds;
+  final void Function(int recordId, bool isExpanded) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_month_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    dateLabel,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...records.map(
+                (record) => _RecordExpansionTile(
+                  record: record,
+                  isExpanded: expandedRecordIds.contains(record.id),
+                  onToggle: (value) => onToggle(record.id, value),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordExpansionTile extends StatelessWidget {
+  const _RecordExpansionTile({
+    required this.record,
+    required this.isExpanded,
+    required this.onToggle,
+  });
+
+  final MedicalRecord record;
+  final bool isExpanded;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F6FB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: PageStorageKey(record.id),
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: onToggle,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ),
+          trailing: Icon(
+            isExpanded
+                ? Icons.keyboard_arrow_up_rounded
+                : Icons.keyboard_arrow_down_rounded,
+            color: const Color(0xFF475467),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  _formatTime(record.receptionStartTime),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.patientName.isEmpty
+                          ? '환자 정보 없음'
+                          : record.patientName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${record.department} · ${record.statusLabel}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(left: 4, top: 6),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.local_hospital_outlined,
+                  size: 16,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '접수 시간: ${record.visitDateLabel}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF475467),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _InfoRow(
+              icon: Icons.local_hospital_outlined,
+              label: '진료과',
+              value: record.department.isEmpty ? '진료과 정보 없음' : record.department,
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              icon: Icons.info_outline,
+              label: '진료 상태',
+              value: record.statusLabel.isEmpty ? '상태 정보 없음' : record.statusLabel,
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              icon: Icons.access_time,
+              label: '접수 시간',
+              value: record.visitDateLabel,
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              icon: Icons.flag_circle_outlined,
+              label: '진료 종료',
+              value: record.treatmentEndTimeLabel,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '메모',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF475467),
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (record.noteLines.isEmpty)
+              Text(
+                '메모가 없습니다.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF667085),
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: record.noteLines
+                    .map(
+                      (note) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '· $note',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF667085),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyHistoryState extends StatelessWidget {
-  const _EmptyHistoryState({required this.rangeLabel});
+  const _EmptyHistoryState({required this.rangeLabel, this.description});
 
   final String rangeLabel;
+  final String? description;
 
   @override
   Widget build(BuildContext context) {
@@ -531,10 +648,11 @@ class _EmptyHistoryState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '다른 기간을 선택하여 확인해보세요.',
+            description ?? '다른 기간을 선택하여 확인해보세요.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: const Color(0xFF667085),
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -549,121 +667,6 @@ class _HistoryFilter {
 
   final HistoryRange range;
   final String label;
-}
-
-class _Visit {
-  const _Visit({
-    required this.id,
-    required this.dateTime,
-    required this.department,
-    required this.doctor,
-    required this.location,
-    required this.diagnosis,
-    required this.status,
-    this.notes = const [],
-  });
-
-  final String id;
-  final DateTime dateTime;
-  final String department;
-  final String doctor;
-  final String location;
-  final String diagnosis;
-  final VisitStatus status;
-  final List<String> notes;
-
-  String get statusLabel {
-    switch (status) {
-      case VisitStatus.completed:
-        return '진료 완료';
-      case VisitStatus.upcoming:
-        return '예약됨';
-      case VisitStatus.cancelled:
-        return '취소됨';
-    }
-  }
-
-  Color get statusColor {
-    switch (status) {
-      case VisitStatus.completed:
-        return const Color(0xFF2EAD66);
-      case VisitStatus.upcoming:
-        return const Color(0xFF2A6FE5);
-      case VisitStatus.cancelled:
-        return const Color(0xFFCC5F5F);
-    }
-  }
-}
-
-enum VisitStatus { completed, upcoming, cancelled }
-
-final List<_Visit> _mockVisits = [
-  _Visit(
-    id: 'visit-6',
-    dateTime: DateTime.now().add(const Duration(days: 3, hours: 10)),
-    department: '외과',
-    doctor: 'Dr. 김서연',
-    location: '본관 2층 204호',
-    diagnosis: '추적 진료 예정',
-    status: VisitStatus.upcoming,
-    notes: ['10분 전 도착 후 접수', '필요 시 추가 검사 안내 예정'],
-  ),
-  _Visit(
-    id: 'visit-5',
-    dateTime: DateTime.now().subtract(const Duration(days: 4, hours: 3)),
-    department: '호흡기내과',
-    doctor: 'Dr. 최동욱',
-    location: '본관 1층 내과 102호',
-    diagnosis: '만성 기침',
-    status: VisitStatus.completed,
-    notes: ['수납 완료', '항히스타민제 10일분 복용', '2주 후 전화 상담 예정'],
-  ),
-  _Visit(
-    id: 'visit-4',
-    dateTime: DateTime.now().subtract(const Duration(days: 15, hours: 5)),
-    department: '영상의학과',
-    doctor: 'Dr. 박지혜',
-    location: '영상센터 3층 CT실',
-    diagnosis: '흉부 CT 추적 검사',
-    status: VisitStatus.completed,
-    notes: ['수납 완료', '6개월 후 재검 권장'],
-  ),
-  _Visit(
-    id: 'visit-3',
-    dateTime: DateTime.now().subtract(const Duration(days: 34, hours: 2)),
-    department: '외과',
-    doctor: 'Dr. 김서연',
-    location: '본관 2층 204호',
-    diagnosis: '복부 통증 상담',
-    status: VisitStatus.completed,
-    notes: ['수납 완료', '소화제 및 진경제 7일분 처방', '복부 초음파 결과 이상 없음'],
-  ),
-  _Visit(
-    id: 'visit-2',
-    dateTime: DateTime.now().subtract(const Duration(days: 80, hours: 1)),
-    department: '호흡기내과',
-    doctor: 'Dr. 이민지',
-    location: '본관 1층 내과 105호',
-    diagnosis: '기관지염',
-    status: VisitStatus.completed,
-    notes: ['수납 완료', '항생제 5일분 처방', '증상 호전됨, 3개월 후 추적 권장'],
-  ),
-  _Visit(
-    id: 'visit-1',
-    dateTime: DateTime.now().subtract(const Duration(days: 140, hours: 6)),
-    department: '정형외과',
-    doctor: 'Dr. 박민수',
-    location: '별관 3층 302호',
-    diagnosis: '어깨 통증 재활 상담',
-    status: VisitStatus.cancelled,
-    notes: ['예약 취소', '환자 요청으로 일정 변경'],
-  ),
-];
-
-String _formatDate(DateTime date) {
-  final weekdays = ['월', '화', '수', '목', '금', '토', '일'];
-  final weekday = weekdays[date.weekday - 1];
-  return '${date.year}-${_pad(date.month)}-${_pad(date.day)} ($weekday)';
 }
 
 String _formatShortDate(DateTime date) =>

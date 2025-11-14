@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import '../models/doctor.dart';
+import '../models/patient_session.dart';
+import '../services/appointment_repository.dart';
 
 class ReservationScreen extends StatefulWidget {
-  const ReservationScreen({super.key});
+  const ReservationScreen({super.key, this.session});
+
+  final PatientSession? session;
 
   @override
   State<ReservationScreen> createState() => _ReservationScreenState();
@@ -9,13 +14,7 @@ class ReservationScreen extends StatefulWidget {
 
 class _ReservationScreenState extends State<ReservationScreen> {
   final _formKey = GlobalKey<FormState>();
-
-  final _departments = const ['호흡기내과', '외과'];
-
-  final _doctorsByDepartment = const {
-    '호흡기내과': ['김현우 교수', '이수민 교수'],
-    '외과': ['박지훈 교수', '최유진 교수'],
-  };
+  final _repository = AppointmentRepository();
 
   final _timeSlots = const [
     '09:00',
@@ -23,6 +22,11 @@ class _ReservationScreenState extends State<ReservationScreen> {
     '10:00',
     '10:30',
     '11:00',
+    '11:30',
+    '12:00',
+    '12:30',
+    '13:00',
+    '13:30',
     '14:00',
     '14:30',
     '15:00',
@@ -30,22 +34,95 @@ class _ReservationScreenState extends State<ReservationScreen> {
     '16:00',
     '16:30',
     '17:00',
-    '17:30',
   ];
 
+  List<Doctor> _allDoctors = [];
+  List<String> _departments = [];
   String? _selectedDepartment;
-  String? _selectedDoctor;
+  Doctor? _selectedDoctor;
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
+  bool _isLoading = false;
+  PatientSession? _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = widget.session;
+    _loadDoctors();
+  }
+
+  Future<void> _loadDoctors() async {
+    setState(() => _isLoading = true);
+    try {
+      print('[예약] 의사 목록 로딩 시작...');
+      final doctors = await _repository.fetchDoctors();
+      print('[예약] 의사 ${doctors.length}명 로드됨');
+      
+      if (doctors.isEmpty) {
+        print('[예약] 경고: 의사 데이터가 없습니다');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('등록된 의료진이 없습니다. 관리자에게 문의하세요.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+      
+      final depts = doctors.map((d) => d.department).where((d) => d.isNotEmpty).toSet().toList();
+      depts.sort();
+      print('[예약] 진료과 ${depts.length}개: $depts');
+      
+      setState(() {
+        _allDoctors = doctors;
+        _departments = depts;
+      });
+    } catch (e, stackTrace) {
+      print('[예약] 오류 발생: $e');
+      print('[예약] 스택 트레이스: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('의료진 정보를 불러오지 못했습니다: $e'),
+            duration: const Duration(seconds: 5),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  List<Doctor> get _filteredDoctors {
+    if (_selectedDepartment == null) return [];
+    return _allDoctors
+        .where((d) => d.department == _selectedDepartment)
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
-    final selectedDoctors = _doctorsByDepartment[_selectedDepartment] ?? [];
     final displayDate = _selectedDate == null
         ? '예약 날짜를 선택하세요'
         : '${_selectedDate!.year}년 ${_selectedDate!.month}월 ${_selectedDate!.day}일 (${_weekdayLabel(_selectedDate!)})';
+
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('진료 예약'),
+          backgroundColor: theme.scaffoldBackgroundColor,
+          foregroundColor: theme.textTheme.headlineMedium?.color,
+          elevation: 0,
+          centerTitle: false,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -98,16 +175,16 @@ class _ReservationScreenState extends State<ReservationScreen> {
                             value == null ? '진료과를 선택하세요' : null,
                       ),
                       const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
+                      DropdownButtonFormField<Doctor>(
                         value: _selectedDoctor,
                         decoration: _inputDecoration('담당 의료진'),
                         icon: const Icon(Icons.keyboard_arrow_down_rounded),
                         dropdownColor: Colors.white,
-                        items: selectedDoctors
+                        items: _filteredDoctors
                             .map(
                               (doctor) => DropdownMenuItem(
                                 value: doctor,
-                                child: Text(doctor),
+                                child: Text(doctor.displayName),
                               ),
                             )
                             .toList(),
@@ -139,31 +216,39 @@ class _ReservationScreenState extends State<ReservationScreen> {
                       const SizedBox(height: 16),
                       Text('예약 시간', style: theme.textTheme.titleSmall),
                       const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 4,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 2.6,
                         children: _timeSlots.map((slot) {
                           final selected = _selectedTimeSlot == slot;
-                          return ChoiceChip(
-                            label: Text(slot),
-                            selected: selected,
-                            onSelected: (_) {
+                          return GestureDetector(
+                            onTap: () {
                               setState(() => _selectedTimeSlot = slot);
                             },
-                            selectedColor: accent,
-                            labelStyle: TextStyle(
-                              color: selected
-                                  ? Colors.white
-                                  : const Color(0xFF1E2432),
-                              fontWeight: FontWeight.w600,
-                            ),
-                            backgroundColor: const Color(0xFFF1F5FB),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
-                                color: selected
-                                    ? accent
-                                    : const Color(0xFFE2E8F0),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              decoration: BoxDecoration(
+                                color: selected ? accent : const Color(0xFFF1F5FB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: selected
+                                      ? accent
+                                      : const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                slot,
+                                style: TextStyle(
+                                  color: selected
+                                      ? Colors.white
+                                      : const Color(0xFF1E2432),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           );
@@ -193,7 +278,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
                   children: [
                     _buildSummaryRow('진료과', _selectedDepartment ?? '-'),
                     const SizedBox(height: 10),
-                    _buildSummaryRow('의료진', _selectedDoctor ?? '-'),
+                    _buildSummaryRow('의료진', _selectedDoctor?.displayName ?? '-'),
                     const SizedBox(height: 10),
                     _buildSummaryRow(
                       '예약 날짜',
@@ -313,9 +398,9 @@ class _ReservationScreenState extends State<ReservationScreen> {
     }
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid || _selectedTimeSlot == null) {
+    if (!isValid || _selectedTimeSlot == null || _selectedDoctor == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('예약 정보를 모두 입력해주세요.'),
@@ -325,17 +410,61 @@ class _ReservationScreenState extends State<ReservationScreen> {
       return;
     }
 
-    final summary =
-        '''${_selectedDepartment ?? ''} / ${_selectedDoctor ?? ''}\n'''
-        '''${_selectedDate!.year}.${_selectedDate!.month}.${_selectedDate!.day} ${_selectedTimeSlot!}''';
+    // 로그인 세션 확인
+    String? patientId;
+    String? patientName;
+    
+    if (_session != null && _session!.patientId.isNotEmpty) {
+      // 로그인한 경우 환자 정보 사용
+      patientId = _session!.patientId;
+      patientName = _session!.name;
+    }
+    // 로그인하지 않은 경우에도 예약 가능 (메시지 제거)
 
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('예약 요청 완료'),
+    setState(() => _isLoading = true);
+
+    try {
+      // 시간 조합
+      final timeParts = _selectedTimeSlot!.split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+      
+      final startTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        hour,
+        minute,
+      );
+
+      final endTime = startTime.add(const Duration(minutes: 30));
+
+      // 예약 생성
+      await _repository.createAppointment(
+        title: '${_selectedDepartment ?? ''} 진료 예약',
+        type: '예약',
+        startTime: startTime,
+        endTime: endTime,
+        memo: '',
+        patientId: patientId,
+        patientName: patientName,
+        patientGender: null,
+        patientAge: null,
+        doctorId: _selectedDoctor!.id,
+      );
+
+      if (!mounted) return;
+
+      // 성공 다이얼로그
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('예약 완료'),
           content: Text(
-            '아직 시스템과 연동되지 않아 실제 예약은 진행되지 않습니다.\n\n입력 정보:\n$summary',
+            '예약이 성공적으로 등록되었습니다.\n\n'
+            '진료과: ${_selectedDepartment ?? ''}\n'
+            '의료진: ${_selectedDoctor?.displayName ?? ''}\n'
+            '일시: ${_selectedDate!.year}.${_selectedDate!.month}.${_selectedDate!.day} ${_selectedTimeSlot!}',
           ),
           actions: [
             TextButton(
@@ -343,9 +472,28 @@ class _ReservationScreenState extends State<ReservationScreen> {
               child: const Text('확인'),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+
+      if (mounted) {
+        // 예약 화면 닫고 대시보드로 복귀
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('예약 중 오류가 발생했습니다: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   String _weekdayLabel(DateTime date) {
