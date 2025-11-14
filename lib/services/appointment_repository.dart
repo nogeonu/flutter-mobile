@@ -61,10 +61,15 @@ class AppointmentRepository {
       doctorUsername: '',
     );
 
+    final json = appointment.toCreateJson();
+    print('[AppointmentRepository] 예약 생성 요청: $json');
+
     final data = await _client.post(
       '/api/patients/appointments/',
-      body: appointment.toCreateJson(),
+      body: json,
     );
+
+    print('[AppointmentRepository] 예약 생성 응답: $data');
 
     if (data is Map<String, dynamic>) {
       return Appointment.fromJson(data);
