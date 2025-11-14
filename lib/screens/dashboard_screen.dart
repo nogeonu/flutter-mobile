@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/feature_item.dart';
+import '../widgets/chat_modal.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/greeting_card.dart';
 import 'doctor_search_screen.dart';
@@ -55,6 +56,17 @@ class DashboardScreen extends StatelessWidget {
 
   void _handleFeatureTap(BuildContext context, FeatureItem feature) {
     switch (feature.id) {
+      case 'chatbot':
+        showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const FractionallySizedBox(
+            heightFactor: 0.88,
+            child: ChatModal(),
+          ),
+        );
+        break;
       case 'department_staff':
         Navigator.of(
           context,
@@ -81,9 +93,9 @@ class DashboardScreen extends StatelessWidget {
         ).push(MaterialPageRoute(builder: (_) => const ParkingScreen()));
         break;
       case 'pharmacy':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const PharmacyScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const PharmacyScreen()));
         break;
       case 'exam_history':
         Navigator.of(

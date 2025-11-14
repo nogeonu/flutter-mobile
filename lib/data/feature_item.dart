@@ -16,6 +16,12 @@ class FeatureItem {
 
 const featureItems = [
   FeatureItem(
+    id: 'chatbot',
+    title: 'AI 상담',
+    description: '병원 안내 챗봇',
+    icon: Icons.chat_bubble_outline,
+  ),
+  FeatureItem(
     id: 'department_staff',
     title: '진료과 · 의료진',
     description: '전문의 정보 확인',
