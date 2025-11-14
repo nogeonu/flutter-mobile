@@ -51,16 +51,15 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
           final userMarker = Marker(
             markerId: 'user',
             latLng: LatLng(position.latitude, position.longitude),
-            infoWindowContent: '현재 위치',
+            infoWindowContent: '📍 현재 위치',
             infoWindowRemovable: false,
-            markerImageSrc: 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_blue.png', // 파란색 마커
           );
           final pharmacyMarker = Marker(
             markerId: 'pharmacy',
             latLng: LatLng(nearest.latitude, nearest.longitude),
-            infoWindowContent: nearest.name,
+            infoWindowContent: '💊 ${nearest.name}',
             infoWindowRemovable: false,
-            markerImageSrc: 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', // 빨간색 마커
+            markerImageSrc: 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
           );
 
           _markers = [userMarker, pharmacyMarker];
