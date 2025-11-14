@@ -1,0 +1,90 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - 'pubspec.yaml'
+  workflow_dispatch: # 수동 실행 가능
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🔍 Analyze code
+        run: flutter analyze
+      
+      - name: 🏗️ Build APK
+        run: flutter build apk --release
+      
+      - name: 📝 Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION+$BUILD_NUMBER"
+      
+      - name: 📤 Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          release_name: v${{ steps.version.outputs.version }} Build ${{ github.run_number }}
+          body: |
+            ## 🎉 건양대학교병원 환자 앱 v${{ steps.version.outputs.version }}
+            
+            ### 📱 다운로드
+            아래 APK 파일을 다운로드하여 설치하세요.
+            
+            ### 🔄 변경사항
+            - 최신 코드 반영
+            - 자동 빌드 및 배포
+            
+            ### 📅 빌드 정보
+            - 빌드 번호: ${{ github.run_number }}
+            - 커밋: ${{ github.sha }}
+            - 빌드 일시: ${{ github.event.head_commit.timestamp }}
+          draft: false
+          prerelease: false
+      
+      - name: 📎 Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: build/app/outputs/flutter-apk/app-release.apk
+          asset_name: konyang-hospital-app-v${{ steps.version.outputs.version }}.apk
+          asset_content_type: application/vnd.android.package-archive
+      
+      - name: ✅ Build Success
+        run: |
+          echo "🎉 APK 빌드 및 릴리스 완료!"
+          echo "📦 다운로드 링크: ${{ steps.create_release.outputs.html_url }}"
+
