@@ -137,6 +137,81 @@ class _ReservationScreenState extends State<ReservationScreen> {
         ? '예약 날짜를 선택하세요'
         : '${_selectedDate!.year}년 ${_selectedDate!.month}월 ${_selectedDate!.day}일 (${_weekdayLabel(_selectedDate!)})';
 
+    // 로그인하지 않은 경우 로그인 유도 화면 표시
+    if (_session == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('진료 예약'),
+          backgroundColor: theme.scaffoldBackgroundColor,
+          foregroundColor: theme.textTheme.headlineMedium?.color,
+          elevation: 0,
+          centerTitle: false,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 80,
+                  color: accent.withOpacity(0.5),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '로그인이 필요합니다',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '진료 예약은 로그인 후 이용 가능합니다.\n\n회원가입 후 로그인하시면\n편리하게 진료 예약을 하실 수 있습니다.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: Colors.grey[600],
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // 로그인 페이지로 이동 (MainShell의 3번째 탭으로)
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    icon: const Icon(Icons.login),
+                    label: const Text(
+                      '로그인하러 가기',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('뒤로 가기'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
