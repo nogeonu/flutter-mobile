@@ -10,6 +10,9 @@ on:
       - 'pubspec.yaml'
   workflow_dispatch: # 수동 실행 가능
 
+permissions:
+  contents: write  # Release 생성 권한
+
 jobs:
   build:
     runs-on: ubuntu-latest
