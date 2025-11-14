@@ -53,12 +53,14 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
             latLng: LatLng(position.latitude, position.longitude),
             infoWindowContent: '현재 위치',
             infoWindowRemovable: false,
+            markerImageSrc: 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_blue.png', // 파란색 마커
           );
           final pharmacyMarker = Marker(
             markerId: 'pharmacy',
             latLng: LatLng(nearest.latitude, nearest.longitude),
             infoWindowContent: nearest.name,
             infoWindowRemovable: false,
+            markerImageSrc: 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', // 빨간색 마커
           );
 
           _markers = [userMarker, pharmacyMarker];
@@ -197,10 +199,15 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
     required double originLng,
     required KakaoPlace destination,
   }) async {
-    final encodedName = Uri.encodeComponent(destination.name);
+    final encodedDestName = Uri.encodeComponent(destination.name);
+    final encodedOriginName = Uri.encodeComponent('내 위치');
+    
+    // 카카오맵 앱 URL: 출발지와 도착지 모두 이름 포함
     final kakaoUri = Uri.parse(
-      'kakaomap://route?sp=$originLat,$originLng&ep=${destination.latitude},'
-      '${destination.longitude},$encodedName&by=CAR',
+      'kakaomap://route?'
+      'sp=$originLat,$originLng&sn=$encodedOriginName&'
+      'ep=${destination.latitude},${destination.longitude}&en=$encodedDestName&'
+      'by=CAR',
     );
 
     if (await canLaunchUrl(kakaoUri)) {
@@ -208,8 +215,9 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
       return;
     }
 
+    // 웹 fallback: 도착지만 설정 (출발지는 카카오맵에서 자동으로 현재 위치 사용)
     final fallbackUri = Uri.parse(
-      'https://map.kakao.com/link/to/$encodedName,${destination.latitude},'
+      'https://map.kakao.com/link/to/$encodedDestName,${destination.latitude},'
       '${destination.longitude}',
     );
     await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
