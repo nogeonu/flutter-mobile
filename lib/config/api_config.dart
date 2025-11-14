@@ -6,7 +6,7 @@ class ApiConfig {
       bool.fromEnvironment('USE_LOCAL_BACKEND', defaultValue: false);
 
   static const String _localBaseUrl = 'http://192.168.41.140:8000'; // Wi-Fi 네트워크 IP (테스트용)
-  static const String _remoteBaseUrl = 'http://34.42.223.43:8000'; // GCP 서버 (프로덕션)
+  static const String _remoteBaseUrl = 'http://34.42.223.43'; // GCP 서버 (Nginx 프록시)
 
   static String get baseUrl =>
       _useLocalBackend ? _localBaseUrl : _remoteBaseUrl;
