@@ -1,0 +1,93 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+  workflow_dispatch: # 수동 실행 가능
+
+permissions:
+  contents: write  # Release 생성 권한
+
+jobs:
+  build:
+    runs-on: macos-latest  # macOS runner 필요 (유료)
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.1'
+          channel: 'stable'
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🍎 Install CocoaPods
+        run: |
+          cd ios
+          pod install
+          cd ..
+      
+      - name: 🏗️ Build iOS (No Codesign)
+        run: |
+          flutter build ios --release --no-codesign
+      
+      - name: 📦 Create IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r konyang-hospital-app.ipa Payload
+          rm -rf Payload
+      
+      - name: 📝 Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION+$BUILD_NUMBER"
+      
+      - name: 📤 Upload IPA to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}-ios-${{ github.run_number }}
+          name: v${{ steps.version.outputs.version }} iOS Build ${{ github.run_number }}
+          body: |
+            ## 🍎 건양대학교병원 환자 앱 (iOS) v${{ steps.version.outputs.version }}
+            
+            ### 📱 다운로드
+            아래 IPA 파일을 다운로드하여 설치하세요.
+            
+            ⚠️ **주의**: 이 IPA는 개발용입니다. App Store를 통해 배포되지 않았으므로:
+            - TestFlight 또는 개발자 프로비저닝이 필요합니다
+            - 또는 사이드로딩 도구(AltStore, Sideloadly 등) 사용
+            
+            ### 🔄 변경사항
+            - 최신 코드 반영
+            - 자동 빌드 및 배포
+            
+            ### 📅 빌드 정보
+            - 빌드 번호: ${{ github.run_number }}
+            - 커밋: ${{ github.sha }}
+            - 빌드 일시: ${{ github.event.head_commit.timestamp }}
+          files: |
+            konyang-hospital-app.ipa
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: ✅ Build Success
+        run: |
+          echo "🎉 iOS IPA 빌드 및 릴리스 완료!"
+          echo "📦 릴리스 태그: v${{ steps.version.outputs.version }}-ios-${{ github.run_number }}"
+

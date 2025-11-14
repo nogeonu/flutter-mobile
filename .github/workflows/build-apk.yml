@@ -1,14 +1,7 @@
-name: Build and Release APK
+name: Build Android APK Only
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'lib/**'
-      - 'android/**'
-      - 'pubspec.yaml'
-  workflow_dispatch: # 수동 실행 가능
+  workflow_dispatch: # 수동 실행만 가능 (자동 빌드는 build-all.yml 사용)
 
 permissions:
   contents: write  # Release 생성 권한
