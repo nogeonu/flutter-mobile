@@ -5,15 +5,12 @@ import '../widgets/feature_card.dart';
 import '../widgets/greeting_card.dart';
 import 'doctor_search_screen.dart';
 import 'hospital_map_screen.dart';
-<<<<<<< HEAD
-=======
+import 'hospital_navigation_screen.dart';
 import 'medical_history_screen.dart';
 import 'parking_screen.dart';
 import 'pharmacy_screen.dart';
 import 'reservation_screen.dart';
->>>>>>> main
 import 'waiting_queue_screen.dart';
-import 'hospital_navigation_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -68,20 +65,11 @@ class DashboardScreen extends StatelessWidget {
           context,
         ).push(MaterialPageRoute(builder: (_) => const HospitalMapScreen()));
         break;
-<<<<<<< HEAD
-<<<<<<< HEAD
-      case 'waiting_queue':
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const WaitingQueueScreen()),
-        );
-=======
-=======
       case 'hospital_navigation':
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const HospitalNavigationScreen()),
         );
         break;
->>>>>>> main
       case 'reservation':
         Navigator.of(
           context,
@@ -106,7 +94,6 @@ class DashboardScreen extends StatelessWidget {
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const WaitingQueueScreen()));
->>>>>>> main
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
