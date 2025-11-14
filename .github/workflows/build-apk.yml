@@ -51,14 +51,11 @@ jobs:
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           echo "Version: $VERSION+$BUILD_NUMBER"
       
-      - name: 📤 Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 📤 Create Release and Upload APK
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
-          release_name: v${{ steps.version.outputs.version }} Build ${{ github.run_number }}
+          name: v${{ steps.version.outputs.version }} Build ${{ github.run_number }}
           body: |
             ## 🎉 건양대학교병원 환자 앱 v${{ steps.version.outputs.version }}
             
@@ -73,21 +70,15 @@ jobs:
             - 빌드 번호: ${{ github.run_number }}
             - 커밋: ${{ github.sha }}
             - 빌드 일시: ${{ github.event.head_commit.timestamp }}
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
           draft: false
           prerelease: false
-      
-      - name: 📎 Upload APK to Release
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: build/app/outputs/flutter-apk/app-release.apk
-          asset_name: konyang-hospital-app-v${{ steps.version.outputs.version }}.apk
-          asset_content_type: application/vnd.android.package-archive
       
       - name: ✅ Build Success
         run: |
           echo "🎉 APK 빌드 및 릴리스 완료!"
-          echo "📦 다운로드 링크: ${{ steps.create_release.outputs.html_url }}"
+          echo "📦 릴리스 태그: v${{ steps.version.outputs.version }}-${{ github.run_number }}"
 
