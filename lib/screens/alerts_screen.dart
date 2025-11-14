@@ -16,12 +16,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   FoodSuggestion? _fruitSuggestion;
   FoodSuggestion? _vegetableSuggestion;
+  bool _isFruitLoading = false;
+  bool _isVegetableLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _fruitSuggestion = _healthInfoService.pickRandomFruit();
-    _vegetableSuggestion = _healthInfoService.pickRandomVegetable();
+    _loadFruitSuggestion();
+    _loadVegetableSuggestion();
   }
 
   @override
@@ -29,16 +31,54 @@ class _AlertsScreenState extends State<AlertsScreen> {
     super.dispose();
   }
 
-  void _pickRandomFruit() {
+  Future<void> _loadFruitSuggestion() async {
     setState(() {
-      _fruitSuggestion = _healthInfoService.pickRandomFruit();
+      _isFruitLoading = true;
     });
+
+    try {
+      final suggestion = await _healthInfoService.fetchRandomFruit();
+      if (!mounted) return;
+      setState(() {
+        _fruitSuggestion = suggestion;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _fruitSuggestion = _healthInfoService.pickRandomFruit();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFruitLoading = false;
+        });
+      }
+    }
   }
 
-  void _pickRandomVegetable() {
+  Future<void> _loadVegetableSuggestion() async {
     setState(() {
-      _vegetableSuggestion = _healthInfoService.pickRandomVegetable();
+      _isVegetableLoading = true;
     });
+
+    try {
+      final suggestion = await _healthInfoService.fetchRandomVegetable();
+      if (!mounted) return;
+      setState(() {
+        _vegetableSuggestion = suggestion;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _vegetableSuggestion = _healthInfoService.pickRandomVegetable();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVegetableLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -62,17 +102,61 @@ class _AlertsScreenState extends State<AlertsScreen> {
           _FoodRecommendationCard(
             suggestion: _fruitSuggestion,
             placeholderText: _fruitIntroText,
-            onPressed: _pickRandomFruit,
+            onPressed: _loadFruitSuggestion,
             isFruit: true,
+            isLoading: _isFruitLoading,
           ),
           const SizedBox(height: 24),
           _FoodRecommendationCard(
             suggestion: _vegetableSuggestion,
             placeholderText: _vegetableIntroText,
-            onPressed: _pickRandomVegetable,
+            onPressed: _loadVegetableSuggestion,
             isFruit: false,
+            isLoading: _isVegetableLoading,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SuggestionIcon extends StatelessWidget {
+  const _SuggestionIcon({
+    required this.emojiFallback,
+    required this.iconUrl,
+    required this.accentColor,
+  });
+
+  final String emojiFallback;
+  final String? iconUrl;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    if (iconUrl == null || iconUrl!.isEmpty) {
+      return Text(
+        emojiFallback,
+        style: const TextStyle(fontSize: 42),
+      );
+    }
+
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: accentColor.withOpacity(0.1),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.network(
+        iconUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Center(
+          child: Text(
+            emojiFallback,
+            style: const TextStyle(fontSize: 36),
+          ),
+        ),
       ),
     );
   }
@@ -84,12 +168,14 @@ class _FoodRecommendationCard extends StatelessWidget {
     required this.placeholderText,
     required this.onPressed,
     required this.isFruit,
+    required this.isLoading,
   });
 
   final FoodSuggestion? suggestion;
   final String placeholderText;
   final VoidCallback onPressed;
   final bool isFruit;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +241,26 @@ class _FoodRecommendationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          if (suggestion == null) ...[
+          if (isLoading) ...[
+            const SizedBox(height: 4),
+            Center(
+              child: SizedBox(
+                height: 28,
+                width: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '조금만 기다려 주세요. 신선한 추천을 불러오고 있어요.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: onContainerColor.withOpacity(0.8),
+              ),
+            ),
+          ] else if (suggestion == null) ...[
             Text(
               placeholderText,
               style: theme.textTheme.bodyLarge?.copyWith(
@@ -174,9 +279,10 @@ class _FoodRecommendationCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  suggestion!.emoji,
-                  style: const TextStyle(fontSize: 42),
+                _SuggestionIcon(
+                  emojiFallback: suggestion!.emoji,
+                  iconUrl: suggestion!.iconUrl,
+                  accentColor: accentColor,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
