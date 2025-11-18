@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'important_phones_screen.dart';
 import 'voice_of_customer_screen.dart';
+import '../widgets/chat_modal.dart';
 
 class CustomerCenterScreen extends StatelessWidget {
   const CustomerCenterScreen({super.key});
@@ -55,11 +56,13 @@ class CustomerCenterScreen extends StatelessWidget {
                 subtitle: '병원 이용 및 앱 관련 문의사항을 검색하실 수 있습니다.',
                 icon: Icons.chat_bubble_outline,
                 onTap: () {
-                  // TODO: 챗봇 화면 구현
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('챗봇 기능은 준비 중입니다.'),
-                      duration: Duration(seconds: 2),
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const FractionallySizedBox(
+                      heightFactor: 0.88,
+                      child: ChatModal(),
                     ),
                   );
                 },

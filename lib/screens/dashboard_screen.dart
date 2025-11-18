@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/feature_item.dart';
 import '../widgets/chat_modal.dart';
+import '../state/app_state.dart';
 import '../widgets/feature_card.dart';
 import '../widgets/greeting_card.dart';
 import 'doctor_search_screen.dart';
@@ -13,8 +14,31 @@ import 'pharmacy_screen.dart';
 import 'reservation_screen.dart';
 import 'waiting_queue_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    AppState.instance.addListener(_handleAppStateChanged);
+  }
+
+  @override
+  void dispose() {
+    AppState.instance.removeListener(_handleAppStateChanged);
+    super.dispose();
+  }
+
+  void _handleAppStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

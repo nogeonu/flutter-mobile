@@ -33,24 +33,34 @@ class ChatService {
 
   final http.Client _client;
 
-  Future<ChatReply> requestReply(
-    String message, {
-    String? sessionId,
-    Map<String, dynamic>? metadata,
-  }) async {
-    final uri = ApiConfig.buildChatUri('/api/chat/');
+Future<ChatReply> requestReply(
+  String message, {
+  String? sessionId,
+  Map<String, dynamic>? metadata,
+}) async {
+  final uri = ApiConfig.buildChatUri('/api/chat/');
+
+  final bodyMap = {
+    'message': message,
+    if (sessionId != null) 'session_id': sessionId,
+    if (metadata != null) 'metadata': metadata,
+  };
+
+  print('🔍 [ChatService] Request URL → $uri');
+  print('📝 [ChatService] Request body → ${jsonEncode(bodyMap)}');
+
+  try {
     final response = await _client.post(
       uri,
       headers: const {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: jsonEncode({
-        'message': message,
-        if (sessionId != null) 'session_id': sessionId,
-        if (metadata != null) 'metadata': metadata,
-      }),
+      body: jsonEncode(bodyMap),
     );
+
+    print('📡 [ChatService] Status → ${response.statusCode}');
+    print('📦 [ChatService] Body → ${response.body}');
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -60,9 +70,9 @@ class ChatService {
         final sources = rawSources == null
             ? const <ChatSource>[]
             : rawSources
-                  .whereType<Map<String, dynamic>>()
-                  .map(ChatSource.fromMap)
-                  .toList();
+                .whereType<Map<String, dynamic>>()
+                .map(ChatSource.fromMap)
+                .toList();
         return ChatReply(message: reply, sources: sources);
       }
       throw ApiException(500, '잘못된 응답 형식입니다.');
@@ -75,7 +85,12 @@ class ChatService {
         : '요청이 실패했습니다.';
 
     throw ApiException(response.statusCode, messageText.toString());
+  } catch (e, st) {
+    print('💥 [ChatService] EXCEPTION → $e');
+    print('💥 [ChatService] STACK → $st');
+    rethrow;
   }
+}
 
   void close() => _client.close();
 }
