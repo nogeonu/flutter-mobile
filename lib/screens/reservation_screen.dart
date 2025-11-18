@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/doctor.dart';
+import '../models/patient_profile.dart';
 import '../models/patient_session.dart';
 import '../services/appointment_repository.dart';
+import '../services/patient_repository.dart';
+import '../state/app_state.dart';
 
 class ReservationScreen extends StatefulWidget {
   const ReservationScreen({super.key, this.session});
@@ -15,6 +18,7 @@ class ReservationScreen extends StatefulWidget {
 class _ReservationScreenState extends State<ReservationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _repository = AppointmentRepository();
+  final _patientRepository = PatientRepository();
 
   final _timeSlots = const [
     '09:00',
@@ -44,12 +48,34 @@ class _ReservationScreenState extends State<ReservationScreen> {
   String? _selectedTimeSlot;
   bool _isLoading = false;
   PatientSession? _session;
+  PatientProfile? _patientProfile;
 
   @override
   void initState() {
     super.initState();
-    _session = widget.session;
+    _session = widget.session ?? AppState.instance.session;
     _loadDoctors();
+    if (_session != null) {
+      _loadPatientProfile();
+    }
+  }
+
+  Future<void> _loadPatientProfile() async {
+    if (_session == null) return;
+    
+    try {
+      print('[예약] 환자 프로필 로딩: ${_session!.accountId}');
+      final profile = await _patientRepository.fetchProfile(_session!.accountId);
+      if (mounted) {
+        setState(() {
+          _patientProfile = profile;
+        });
+        print('[예약] 환자 프로필 로드 완료: ${profile.name}, 성별: ${profile.gender}, 나이: ${profile.age}');
+      }
+    } catch (e) {
+      print('[예약] 환자 프로필 로드 실패: $e');
+      // 프로필 로드 실패해도 예약은 가능하도록 계속 진행
+    }
   }
 
   Future<void> _loadDoctors() async {
@@ -110,6 +136,81 @@ class _ReservationScreenState extends State<ReservationScreen> {
     final displayDate = _selectedDate == null
         ? '예약 날짜를 선택하세요'
         : '${_selectedDate!.year}년 ${_selectedDate!.month}월 ${_selectedDate!.day}일 (${_weekdayLabel(_selectedDate!)})';
+
+    // 로그인하지 않은 경우 로그인 유도 화면 표시
+    if (_session == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('진료 예약'),
+          backgroundColor: theme.scaffoldBackgroundColor,
+          foregroundColor: theme.textTheme.headlineMedium?.color,
+          elevation: 0,
+          centerTitle: false,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 80,
+                  color: accent.withOpacity(0.5),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  '로그인이 필요합니다',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '진료 예약은 로그인 후 이용 가능합니다.\n\n회원가입 후 로그인하시면\n편리하게 진료 예약을 하실 수 있습니다.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: Colors.grey[600],
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      // 로그인 페이지로 이동 (MainShell의 3번째 탭으로)
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    icon: const Icon(Icons.login),
+                    label: const Text(
+                      '로그인하러 가기',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('뒤로 가기'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     if (_isLoading) {
       return Scaffold(
@@ -418,8 +519,10 @@ class _ReservationScreenState extends State<ReservationScreen> {
       // 로그인한 경우 환자 정보 사용
       patientId = _session!.patientId;
       patientName = _session!.name;
+      print('[예약] 로그인한 사용자: $patientName ($patientId)');
+    } else {
+      print('[예약] 로그인하지 않은 사용자');
     }
-    // 로그인하지 않은 경우에도 예약 가능 (메시지 제거)
 
     setState(() => _isLoading = true);
 
@@ -439,6 +542,17 @@ class _ReservationScreenState extends State<ReservationScreen> {
 
       final endTime = startTime.add(const Duration(minutes: 30));
 
+      // 환자 정보 (프로필에서 가져오기)
+      String? patientGender;
+      int? patientAge;
+      if (_patientProfile != null) {
+        patientGender = _patientProfile!.gender;
+        patientAge = _patientProfile!.age;
+        print('[예약 생성] 환자 프로필 정보: 성별=$patientGender, 나이=$patientAge');
+      }
+
+      print('[예약 생성] patientId: $patientId, patientName: $patientName, doctor: ${_selectedDoctor!.id}');
+
       // 예약 생성
       await _repository.createAppointment(
         title: '${_selectedDepartment ?? ''} 진료 예약',
@@ -448,8 +562,8 @@ class _ReservationScreenState extends State<ReservationScreen> {
         memo: '',
         patientId: patientId,
         patientName: patientName,
-        patientGender: null,
-        patientAge: null,
+        patientGender: patientGender,
+        patientAge: patientAge,
         doctorId: _selectedDoctor!.id,
       );
 
@@ -477,6 +591,10 @@ class _ReservationScreenState extends State<ReservationScreen> {
 
       if (mounted) {
         // 예약 화면 닫고 대시보드로 복귀
+        // AppState를 업데이트해서 LoginScreen이 자동으로 새로고침되도록 함
+        if (_session != null) {
+          AppState.instance.updateSession(_session);
+        }
         Navigator.pop(context);
       }
     } catch (e) {

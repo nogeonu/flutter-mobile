@@ -46,7 +46,7 @@ class _SignupScreenState extends State<SignupScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: theme.textTheme.headlineMedium?.color,
         elevation: 0,
-        centerTitle: false,
+        centerTitle: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(

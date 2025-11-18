@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:kakao_map_plugin/kakao_map_plugin.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +16,7 @@ class HospitalNavigationScreen extends StatefulWidget {
 class _HospitalNavigationScreenState extends State<HospitalNavigationScreen> {
   KakaoMapController? _mapController;
   late final Set<Marker> _markers;
+  Position? _userPosition;
 
   @override
   void initState() {
@@ -25,8 +27,25 @@ class _HospitalNavigationScreenState extends State<HospitalNavigationScreen> {
         latLng: LatLng(MapConfig.hospitalLatitude, MapConfig.hospitalLongitude),
         infoWindowContent: MapConfig.hospitalName,
         infoWindowRemovable: false,
+        markerImageSrc: 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', // 빨간색 마커
       ),
     };
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      if (mounted) {
+        setState(() {
+          _userPosition = position;
+        });
+      }
+    } catch (e) {
+      // 위치 가져오기 실패 시 무시 (출발지 없이도 경로 안내 가능)
+    }
   }
 
   @override
@@ -84,19 +103,32 @@ class _HospitalNavigationScreenState extends State<HospitalNavigationScreen> {
   }
 
   Future<void> _openKakaoNavigation() async {
-    final encodedName = Uri.encodeComponent(MapConfig.hospitalName);
-    final kakaoMapUri = Uri.parse(
-      'kakaomap://route?ep=${MapConfig.hospitalLatitude},'
-      '${MapConfig.hospitalLongitude},$encodedName&by=CAR',
-    );
+    final encodedDestName = Uri.encodeComponent(MapConfig.hospitalName);
+    final encodedOriginName = Uri.encodeComponent('내 위치');
+    
+    // 사용자 위치가 있으면 출발지 포함, 없으면 도착지만
+    String kakaoMapUrl;
+    if (_userPosition != null) {
+      kakaoMapUrl = 'kakaomap://route?'
+          'sp=${_userPosition!.latitude},${_userPosition!.longitude}&sn=$encodedOriginName&'
+          'ep=${MapConfig.hospitalLatitude},${MapConfig.hospitalLongitude}&en=$encodedDestName&'
+          'by=CAR';
+    } else {
+      kakaoMapUrl = 'kakaomap://route?'
+          'ep=${MapConfig.hospitalLatitude},${MapConfig.hospitalLongitude}&en=$encodedDestName&'
+          'by=CAR';
+    }
+    
+    final kakaoMapUri = Uri.parse(kakaoMapUrl);
 
     if (await canLaunchUrl(kakaoMapUri)) {
       await launchUrl(kakaoMapUri);
       return;
     }
 
+    // 웹 fallback: 도착지만 설정
     final fallbackUri = Uri.parse(
-      'https://map.kakao.com/link/to/$encodedName,'
+      'https://map.kakao.com/link/to/$encodedDestName,'
       '${MapConfig.hospitalLatitude},${MapConfig.hospitalLongitude}',
     );
     await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);

@@ -119,7 +119,7 @@ class Appointment {
       if (endTime != null) 'end_time': endTime!.toIso8601String(),
       'status': status,
       if (memo != null && memo!.isNotEmpty) 'memo': memo,
-      if (patientId != null) 'patient_identifier': patientId,
+      if (patientId != null) 'patient_id': patientId, // Changed from patient_identifier to patient_id
       if (patientName != null) 'patient_name': patientName,
       if (patientGender != null) 'patient_gender': patientGender,
       if (patientAge != null) 'patient_age': patientAge,

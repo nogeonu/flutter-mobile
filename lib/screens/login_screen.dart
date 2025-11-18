@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../models/appointment.dart';
 import '../models/medical_record.dart';
 import '../models/patient_profile.dart';
 import '../models/patient_session.dart';
+import '../services/appointment_repository.dart';
 import '../services/patient_repository.dart';
 import '../state/app_state.dart';
 import '../widgets/social_login_button.dart';
@@ -20,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _repository = PatientRepository();
+  final _appointmentRepository = AppointmentRepository();
 
   bool _obscurePassword = true;
   bool _rememberMe = false;
@@ -29,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   String? _profileError;
   List<MedicalRecord> _medicalRecords = const [];
+  List<Appointment> _appointments = const [];
 
   @override
   void initState() {
@@ -56,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _session = session;
         _profileError = null;
         _medicalRecords = const [];
+        _appointments = const [];
       });
       if (session != null) {
         _loadPatientInfo(session);
@@ -109,13 +114,26 @@ class _LoginScreenState extends State<LoginScreen> {
       _profileError = null;
     });
     try {
+      // 진료 기록 가져오기
       final records = await _repository.fetchMedicalRecords(session.patientId);
       records.sort(
         (a, b) => b.receptionStartTime.compareTo(a.receptionStartTime),
       );
+      
+      // 예약 정보 가져오기 (실패해도 계속 진행)
+      List<Appointment> appointments = [];
+      try {
+        appointments = await _appointmentRepository.fetchMyAppointments(session.patientId);
+        appointments.sort((a, b) => a.startTime.compareTo(b.startTime));
+      } catch (appointmentError) {
+        // 예약 API가 아직 준비되지 않았거나 데이터가 없으면 빈 리스트 사용
+        // 에러는 조용히 무시
+      }
+      
       if (!mounted) return;
       setState(() {
         _medicalRecords = records;
+        _appointments = appointments;
       });
     } catch (error) {
       if (!mounted) return;
@@ -135,6 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _session = null;
       _medicalRecords = const [];
+      _appointments = const [];
       _profileError = null;
     });
     _emailController.clear();
@@ -153,6 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
         isLoading: _isLoadingProfile,
         errorMessage: _profileError,
         records: _medicalRecords,
+        appointments: _appointments,
         onLogout: _handleLogout,
       );
     }
@@ -398,6 +418,7 @@ class _MyPageView extends StatelessWidget {
   const _MyPageView({
     required this.session,
     required this.records,
+    required this.appointments,
     required this.isLoading,
     required this.onLogout,
     this.errorMessage,
@@ -405,6 +426,7 @@ class _MyPageView extends StatelessWidget {
 
   final PatientSession session;
   final List<MedicalRecord> records;
+  final List<Appointment> appointments;
   final bool isLoading;
   final VoidCallback onLogout;
   final String? errorMessage;
@@ -499,6 +521,9 @@ class _MyPageView extends StatelessWidget {
             visitsThisYear: visitsThisYear,
             recentRecord: completed.isNotEmpty ? completed.first : null,
             upcomingRecord: upcoming.isNotEmpty ? upcoming.first : null,
+            upcomingAppointment: appointments.where((a) => a.status == 'scheduled' && a.startTime.isAfter(DateTime.now())).isNotEmpty
+                ? appointments.where((a) => a.status == 'scheduled' && a.startTime.isAfter(DateTime.now())).first
+                : null,
           ),
           const SizedBox(height: 20),
           if (isLoading)
@@ -654,11 +679,13 @@ class _SummaryGrid extends StatelessWidget {
     required this.visitsThisYear,
     required this.recentRecord,
     required this.upcomingRecord,
+    this.upcomingAppointment,
   });
 
   final int visitsThisYear;
   final MedicalRecord? recentRecord;
   final MedicalRecord? upcomingRecord;
+  final Appointment? upcomingAppointment;
 
   @override
   Widget build(BuildContext context) {
@@ -686,9 +713,11 @@ class _SummaryGrid extends StatelessWidget {
       _SummaryCard(
         icon: Icons.event_available_outlined,
         label: '다가오는 일정',
-        value: upcomingRecord != null
-            ? upcomingRecord!.visitDateLabel
-            : '예정 없음',
+        value: upcomingAppointment != null
+            ? '${upcomingAppointment!.startTimeLabel}\n${upcomingAppointment!.title}'
+            : (upcomingRecord != null
+                ? upcomingRecord!.visitDateLabel
+                : '예정 없음'),
       ),
     ];
 

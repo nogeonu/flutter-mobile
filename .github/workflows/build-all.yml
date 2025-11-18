@@ -1,0 +1,183 @@
+name: Build APK & iOS
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch: # 수동 실행 가능
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.1'
+          channel: 'stable'
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🔍 Analyze code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
+      
+      - name: 🏗️ Build APK
+        run: flutter build apk --release
+      
+      - name: 📝 Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+      
+      - name: 📤 Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 5
+      
+      - name: ✅ Android Build Success
+        run: echo "🤖 Android APK 빌드 완료!"
+
+  build-ios:
+    runs-on: macos-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.1'
+          channel: 'stable'
+      
+      - name: 📦 Install dependencies
+        run: flutter pub get
+      
+      - name: 🍎 Install CocoaPods
+        run: |
+          cd ios
+          pod install
+          cd ..
+      
+      - name: 🏗️ Build iOS (No Codesign)
+        run: flutter build ios --release --no-codesign
+      
+      - name: 📦 Create IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r konyang-hospital-app.ipa Payload
+          rm -rf Payload
+      
+      - name: 📝 Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+      
+      - name: 📤 Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: konyang-hospital-app.ipa
+          retention-days: 5
+      
+      - name: ✅ iOS Build Success
+        run: echo "🍎 iOS IPA 빌드 완료!"
+
+  create-release:
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 📝 Get version info
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+      
+      - name: 📥 Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: ./artifacts
+      
+      - name: 📥 Download IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-ipa
+          path: ./artifacts
+      
+      - name: 📤 Create Release with APK & IPA
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          name: v${{ steps.version.outputs.version }} Build ${{ github.run_number }}
+          body: |
+            ## 🎉 건양대학교병원 환자 앱 v${{ steps.version.outputs.version }}
+            
+            ### 📱 다운로드
+            
+            #### 🤖 Android
+            - **app-release.apk**: 안드로이드용 APK 파일
+            - 설정 → 보안 → 알 수 없는 출처 허용 후 설치
+            
+            #### 🍎 iOS
+            - **konyang-hospital-app.ipa**: iOS용 IPA 파일
+            - ⚠️ TestFlight 또는 개발자 프로비저닝 필요
+            - 또는 AltStore, Sideloadly 등 사이드로딩 도구 사용
+            
+            ### 🔄 변경사항
+            - Nginx 프록시를 통한 API 접근 (http://34.42.223.43)
+            - 최신 코드 반영
+            - 자동 빌드 및 배포
+            
+            ### 📅 빌드 정보
+            - 버전: ${{ steps.version.outputs.version }}
+            - 빌드 번호: ${{ github.run_number }}
+            - 커밋: ${{ github.sha }}
+            - 빌드 일시: ${{ github.event.head_commit.timestamp }}
+            
+            ### 🌐 API 서버
+            - Base URL: http://34.42.223.43/api
+          files: |
+            ./artifacts/app-release.apk
+            ./artifacts/konyang-hospital-app.ipa
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: ✅ Release Complete
+        run: |
+          echo "🎉 APK & IPA 릴리스 완료!"
+          echo "📦 릴리스 태그: v${{ steps.version.outputs.version }}-${{ github.run_number }}"
+
