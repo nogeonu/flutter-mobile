@@ -115,7 +115,10 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       // 진료 기록 가져오기
-      final records = await _repository.fetchMedicalRecords(session.patientId);
+      final records = await _repository.fetchMedicalRecords(
+        session.patientId,
+        patientPk: session.patientPk,
+      );
       records.sort(
         (a, b) => b.receptionStartTime.compareTo(a.receptionStartTime),
       );

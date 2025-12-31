@@ -8,6 +8,10 @@ class ApiConfig {
   static const bool _useLocalBackend =
       bool.fromEnvironment('USE_LOCAL_BACKEND', defaultValue: false);
 
+  /// 예약/진료 API는 별도 백엔드를 쓰는 경우가 있어 분리합니다.
+  static const bool _useLocalAppointmentBackend =
+      bool.fromEnvironment('USE_LOCAL_APPOINTMENT_BACKEND', defaultValue: false);
+
   /// `flutter run --dart-define=USE_LOCAL_CHAT_BACKEND=true` 로 실행하면 로컬 채팅 백엔드로 전환됩니다.
   // 기본적으로는 main의 설정을 따릅니다 (개발 환경에 맞게 override 가능).
   static const bool _useLocalChatBackend =
@@ -16,6 +20,10 @@ class ApiConfig {
   /// `flutter run --dart-define=BASE_URL=...`로 직접 베이스 URL을 지정할 수 있습니다.
   static const String _baseUrlOverride =
       String.fromEnvironment('BASE_URL', defaultValue: '');
+
+  /// `flutter run --dart-define=APPOINTMENT_BASE_URL=...`로 예약 API URL을 지정할 수 있습니다.
+  static const String _appointmentBaseUrlOverride =
+      String.fromEnvironment('APPOINTMENT_BASE_URL', defaultValue: '');
 
   /// `flutter run --dart-define=CHAT_BASE_URL=...`로 채팅 베이스 URL을 지정할 수 있습니다.
   static const String _chatBaseUrlOverride =
@@ -41,6 +49,11 @@ class ApiConfig {
     return _useLocalBackend ? _localBaseUrl : _remoteBaseUrl;
   }
 
+  static String get appointmentBaseUrl {
+    if (_appointmentBaseUrlOverride.isNotEmpty) return _appointmentBaseUrlOverride;
+    return _useLocalAppointmentBackend ? _localBaseUrl : _remoteBaseUrl;
+  }
+
   static String get chatBaseUrl {
     if (_chatBaseUrlOverride.isNotEmpty) return _chatBaseUrlOverride;
     return _useLocalChatBackend ? _localChatBaseUrl : _remoteChatBaseUrl;
@@ -48,6 +61,13 @@ class ApiConfig {
 
   static Uri buildUri(String path, [Map<String, dynamic>? query]) {
     final uri = Uri.parse('$baseUrl$path');
+    if (query == null || query.isEmpty) return uri;
+    final queryMap = query.map((key, value) => MapEntry(key, value.toString()));
+    return uri.replace(queryParameters: {...uri.queryParameters, ...queryMap});
+  }
+
+  static Uri buildAppointmentUri(String path, [Map<String, dynamic>? query]) {
+    final uri = Uri.parse('$appointmentBaseUrl$path');
     if (query == null || query.isEmpty) return uri;
     final queryMap = query.map((key, value) => MapEntry(key, value.toString()));
     return uri.replace(queryParameters: {...uri.queryParameters, ...queryMap});

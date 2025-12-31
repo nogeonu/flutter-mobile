@@ -1,9 +1,11 @@
+import '../config/api_config.dart';
 import '../models/appointment.dart';
 import '../models/doctor.dart';
 import 'api_client.dart';
 
 class AppointmentRepository {
-  AppointmentRepository({ApiClient? client}) : _client = client ?? ApiClient();
+  AppointmentRepository({ApiClient? client})
+      : _client = client ?? ApiClient(uriBuilder: ApiConfig.buildAppointmentUri);
 
   final ApiClient _client;
 

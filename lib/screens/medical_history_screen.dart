@@ -65,7 +65,10 @@ class _MedicalHistoryScreenState extends State<MedicalHistoryScreen> {
     });
 
     try {
-      final records = await _repository.fetchMedicalRecords(session.patientId);
+      final records = await _repository.fetchMedicalRecords(
+        session.patientId,
+        patientPk: session.patientPk,
+      );
       records.sort((a, b) => b.receptionStartTime.compareTo(a.receptionStartTime));
       setState(() {
         _records = records;

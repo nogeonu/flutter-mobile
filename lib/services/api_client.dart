@@ -14,18 +14,23 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+  ApiClient({
+    http.Client? client,
+    Uri Function(String, [Map<String, dynamic>?])? uriBuilder,
+  })  : _client = client ?? http.Client(),
+        _uriBuilder = uriBuilder ?? ApiConfig.buildUri;
 
   final http.Client _client;
+  final Uri Function(String, [Map<String, dynamic>?]) _uriBuilder;
 
   Future<dynamic> get(String path, {Map<String, dynamic>? query}) async {
-    final uri = ApiConfig.buildUri(path, query);
+    final uri = _uriBuilder(path, query);
     final response = await _client.get(uri, headers: _defaultHeaders);
     return _handleResponse(response);
   }
 
   Future<dynamic> post(String path, {Map<String, dynamic>? body}) async {
-    final uri = ApiConfig.buildUri(path);
+    final uri = _uriBuilder(path);
     final response = await _client.post(
       uri,
       headers: _defaultHeaders,
@@ -35,7 +40,7 @@ class ApiClient {
   }
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body}) async {
-    final uri = ApiConfig.buildUri(path);
+    final uri = _uriBuilder(path);
     final response = await _client.put(
       uri,
       headers: _defaultHeaders,

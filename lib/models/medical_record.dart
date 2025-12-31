@@ -51,11 +51,33 @@ class MedicalRecord {
     if (endTimeValue is String && endTimeValue.isNotEmpty) {
       endTime = DateTime.tryParse(endTimeValue);
     }
+    String? readNestedValue(Object? raw, List<String> keys) {
+      if (raw is! Map) return null;
+      for (final key in keys) {
+        final value = raw[key];
+        if (value != null) return value.toString();
+      }
+      return null;
+    }
+
+    final patientRaw = json['patient'];
+    final patientId = (json['patient_id'] ??
+            json['patient_identifier'] ??
+            json['patientId'] ??
+            json['patient_pk'] ??
+            readNestedValue(patientRaw, ['patient_id', 'patientId', 'id', 'pk']))
+        ?.toString() ??
+        '';
+    final patientName = (json['name'] ??
+            json['patient_name'] ??
+            readNestedValue(patientRaw, ['name', 'patient_name']))
+        ?.toString() ??
+        '';
 
     return MedicalRecord(
       id: json['id'] is int ? json['id'] as int : int.parse(json['id'].toString()),
-      patientId: json['patient_id'] as String? ?? '',
-      patientName: json['name'] as String? ?? '',
+      patientId: patientId,
+      patientName: patientName,
       department: json['department'] as String? ?? '',
       status: json['status'] as String? ?? '',
       notes: json['notes'] as String? ?? '',

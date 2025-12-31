@@ -54,20 +54,60 @@ class PatientRepository {
     return null;
   }
 
-  Future<List<MedicalRecord>> fetchMedicalRecords(String patientId) async {
+  Future<List<MedicalRecord>> fetchMedicalRecords(
+    String patientId, {
+    int? patientPk,
+  }) async {
+    if (patientId.trim().isEmpty && patientPk == null) {
+      return const [];
+    }
+
+    final query = <String, dynamic>{'patient_id': patientId};
+    if (patientPk != null) {
+      query['patient'] = patientPk;
+      query['patient_pk'] = patientPk;
+    }
+
     final data = await _client.get(
-      '/api/lung_cancer/patients/$patientId/medical_records/',
+      '/api/lung_cancer/medical-records/',
+      query: query,
     );
 
-    if (data is Map<String, dynamic> && data['medical_records'] is List) {
-      final items = data['medical_records'] as List<dynamic>;
-      return items
-          .whereType<Map<String, dynamic>>()
-          .map(MedicalRecord.fromJson)
-          .toList();
+    String? normalizePatientValue(Object? raw) {
+      if (raw == null) return null;
+      if (raw is Map) {
+        final nested = raw['patient_id'] ?? raw['patientId'] ?? raw['id'] ?? raw['pk'];
+        return nested?.toString();
+      }
+      return raw.toString();
+    }
+
+    bool matchesPatient(Map<String, dynamic> item) {
+      final raw = item['patient_id'] ??
+          item['patient_identifier'] ??
+          item['patientId'] ??
+          item['patient_pk'] ??
+          item['patient'];
+      final normalized = normalizePatientValue(raw);
+      if (normalized == null) return false;
+      if (normalized == patientId) return true;
+      if (patientPk != null && normalized == patientPk.toString()) return true;
+      return false;
+    }
+
+    if (data is Map<String, dynamic>) {
+      final results = data['results'] ?? data['medical_records'];
+      if (results is List) {
+        return results
+            .whereType<Map<String, dynamic>>()
+            .where(matchesPatient)
+            .map(MedicalRecord.fromJson)
+            .toList();
+      }
     } else if (data is List) {
       return data
           .whereType<Map<String, dynamic>>()
+          .where(matchesPatient)
           .map(MedicalRecord.fromJson)
           .toList();
     }
