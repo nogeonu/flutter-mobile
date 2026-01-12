@@ -20,6 +20,8 @@ class _ChatModalState extends State<ChatModal> {
   late final String _chatSessionKey;
   late final String _chatSessionId;
   final Set<String> _expandedRowKeys = {};
+  String? _pendingReservationDepartment;
+  String? _selectedDoctorKey;
 
   bool _isSending = false;
 
@@ -134,6 +136,9 @@ class _ChatModalState extends State<ChatModal> {
 
                     final parsedTable =
                         message.table ?? _extractTableFromText(message.text);
+                    final enableDoctorSelection = !message.isUser &&
+                        parsedTable != null &&
+                        _isDoctorSelectionPrompt(message.text);
                     final displayText = parsedTable == null
                         ? message.text
                         : _summarizeMessage(message.text);
