@@ -276,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           _rememberMe = value;
                         });
                       },
-                      activeColor: theme.colorScheme.primary,
+                      activeThumbColor: theme.colorScheme.primary,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     const SizedBox(width: 4),

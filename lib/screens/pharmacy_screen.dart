@@ -3,7 +3,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:kakao_map_plugin/kakao_map_plugin.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../config/map_config.dart';
 import '../services/kakao_local_service.dart';
 
 class PharmacyScreen extends StatefulWidget {

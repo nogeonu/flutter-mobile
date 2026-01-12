@@ -413,7 +413,7 @@ class _BirthGenderRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: gender,
+            initialValue: gender,
             decoration: InputDecoration(
               labelText: '성별',
               border: OutlineInputBorder(

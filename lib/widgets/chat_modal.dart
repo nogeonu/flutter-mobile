@@ -163,7 +163,11 @@ class _ChatModalState extends State<ChatModal> {
                             ),
                             if (parsedTable != null) ...[
                               const SizedBox(height: 8),
-                              _buildTableCards(parsedTable, theme),
+                              _buildTableCards(
+                                parsedTable,
+                                theme,
+                                enableDoctorSelection: enableDoctorSelection,
+                              ),
                             ],
                           ],
                         ),
@@ -302,9 +306,17 @@ class _ChatModalState extends State<ChatModal> {
     return ChatTable(headers: headers, rows: rows);
   }
 
-  Widget _buildTableCards(ChatTable table, ThemeData theme) {
+  Widget _buildTableCards(
+    ChatTable table,
+    ThemeData theme, {
+    bool enableDoctorSelection = false,
+  }) {
     if (table.rows.isEmpty) {
       return const SizedBox.shrink();
+    }
+
+    if (_isDoctorTable(table)) {
+      return _buildDoctorCards(table, theme, enableSelection: enableDoctorSelection);
     }
 
     final headerMap = <String, int>{};
@@ -323,10 +335,14 @@ class _ChatModalState extends State<ChatModal> {
     const timeKey = '\uC2DC\uAC04';
     const deptKey = '\uACFC';
     const deptAltKey = '\uC9C4\uB8CC\uACFC';
+    const doctorKey = '\uC758\uB8CC\uC9C4';
+    const doctorAltKey = '\uC758\uC0AC';
+    const doctorAltKey2 = '\uB2F4\uB2F9\uC758';
     const statusKey = '\uC0C1\uD0DC';
     final dateIndex = pickIndex([dateKey], 0);
     final timeIndex = pickIndex([timeKey], 1);
     final deptIndex = pickIndex([deptKey, deptAltKey], 2);
+    final doctorIndex = pickIndex([doctorKey, doctorAltKey, doctorAltKey2], -1);
     final hasStatusKey = headerMap.containsKey(statusKey);
     final statusIndex = hasStatusKey ? pickIndex([statusKey], 3) : -1;
     final memoIndex = _findMemoIndex(table);
@@ -343,8 +359,11 @@ class _ChatModalState extends State<ChatModal> {
       final date = readCell(row, dateIndex);
       final time = readCell(row, timeIndex);
       final department = readCell(row, deptIndex);
+      final doctor = doctorIndex >= 0 ? readCell(row, doctorIndex) : '';
       final status = hasStatusKey ? readCell(row, statusIndex) : '';
       final showStatus = hasStatusKey && status.trim().isNotEmpty && status != '-';
+      final showDoctor =
+          doctorIndex >= 0 && doctor.trim().isNotEmpty && doctor != '-';
       final memo = memoIndex >= 0 ? readCell(row, memoIndex) : '';
       final memoText = memo == '-' ? '' : memo;
       final canExpand = memoIndex >= 0;
@@ -399,6 +418,17 @@ class _ChatModalState extends State<ChatModal> {
                       ],
                     ],
                   ),
+                  if (showDoctor) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      doctor,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
                   if (canExpand)
                     AnimatedCrossFade(
                       firstChild: const SizedBox.shrink(),
@@ -439,6 +469,194 @@ class _ChatModalState extends State<ChatModal> {
           ),
         ),
       );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: cards,
+    );
+  }
+
+  bool _isDoctorTable(ChatTable table) {
+    final headers =
+        table.headers.map((header) => header.trim()).toList(growable: false);
+    final isReservationLike =
+        headers.contains('날짜') && headers.contains('시간');
+    if (isReservationLike) return false;
+    return headers.contains('이름') ||
+        headers.contains('직책') ||
+        headers.contains('연락처');
+  }
+
+  bool _isDoctorSelectionPrompt(String text) {
+    final compact = text.replaceAll(' ', '');
+    return compact.contains('의료진을선택') ||
+        compact.contains('의사를선택') ||
+        compact.contains('의료진선택');
+  }
+
+  String? _extractDepartmentFromPrompt(String text) {
+    final match = RegExp(r'([가-힣]{2,10})\s*의료진').firstMatch(text);
+    return match?.group(1);
+  }
+
+  Map<String, String?> _splitDoctorDisplay(String text) {
+    final trimmed = text.trim();
+    final match = RegExp(r'^(.+?)\s*\(([^)]+)\)$').firstMatch(trimmed);
+    if (match != null) {
+      final base = match.group(1)?.trim() ?? trimmed;
+      final suffix = match.group(2)?.trim() ?? '';
+      final code = (suffix.isEmpty ||
+              suffix == '의료진' ||
+              RegExp(r'^\\d+$').hasMatch(suffix))
+          ? null
+          : suffix;
+      return {'name': base.isEmpty ? trimmed : base, 'code': code};
+    }
+    return {'name': trimmed, 'code': null};
+  }
+
+  void _handleDoctorSelection(String name) {
+    final department = _pendingReservationDepartment;
+    final parsed = _splitDoctorDisplay(name);
+    final baseName = parsed['name'] ?? name;
+    final doctorCode = parsed['code'];
+    final metadata = <String, dynamic>{
+      'doctor_name': baseName,
+      if (doctorCode != null) 'doctor_code': doctorCode,
+      if (department != null && department.trim().isNotEmpty)
+        'department': department,
+    };
+    _pendingReservationDepartment = null;
+    setState(() {
+      _selectedDoctorKey = name;
+    });
+    _sendQuickMessage('$baseName 의사로 예약할게요', extraMetadata: metadata);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$baseName 의료진을 선택했습니다.'),
+        duration: const Duration(milliseconds: 1200),
+      ),
+    );
+  }
+
+  Widget _buildDoctorCards(
+    ChatTable table,
+    ThemeData theme, {
+    bool enableSelection = false,
+  }) {
+    final headerMap = <String, int>{};
+    for (var i = 0; i < table.headers.length; i++) {
+      headerMap[table.headers[i].trim()] = i;
+    }
+
+    int pickIndex(List<String> candidates, int fallback) {
+      for (final key in candidates) {
+        final index = headerMap[key];
+        if (index != null) return index;
+      }
+      return fallback;
+    }
+
+    final nameIndex = pickIndex(['이름', '의료진', '의사'], 0);
+    final titleIndex = pickIndex(['직책', '직위', '직급'], -1);
+    final phoneIndex = pickIndex(['연락처', '전화', '전화번호'], -1);
+
+    String readCell(List<String> row, int index) {
+      if (index < 0 || index >= row.length) return '-';
+      final value = row[index].trim();
+      return value.isEmpty ? '-' : value;
+    }
+
+    final cards = <Widget>[];
+    for (var rowIndex = 0; rowIndex < table.rows.length; rowIndex++) {
+      final row = table.rows[rowIndex];
+      final name = readCell(row, nameIndex);
+      final title = titleIndex >= 0 ? readCell(row, titleIndex) : '-';
+      final phone = phoneIndex >= 0 ? readCell(row, phoneIndex) : '-';
+      final isSelected = enableSelection && name == _selectedDoctorKey;
+
+      final card = Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: enableSelection
+                ? (isSelected ? Colors.blue.shade400 : Colors.blue.shade100)
+                : Colors.grey.shade200,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '선택됨',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.blue.shade600,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (title != '-' || phone != '-') ...[
+              const SizedBox(height: 6),
+              if (title != '-')
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              if (phone != '-')
+                Text(
+                  phone,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+            ],
+          ],
+        ),
+      );
+      if (enableSelection) {
+        cards.add(
+          InkWell(
+            onTap: () => _handleDoctorSelection(name),
+            borderRadius: BorderRadius.circular(12),
+            child: card,
+          ),
+        );
+      } else {
+        cards.add(card);
+      }
     }
 
     return Column(
@@ -549,18 +767,27 @@ class _ChatModalState extends State<ChatModal> {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
+    _inputController.clear();
+    _sendQuickMessage(text);
+  }
+
+  void _sendQuickMessage(String text, {Map<String, dynamic>? extraMetadata}) {
+    if (_isSending) return;
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
     setState(() {
-      _messages.add(ChatMessage(text: text, isUser: true));
-      _inputController.clear();
+      _messages.add(ChatMessage(text: trimmed, isUser: true));
       _isSending = true;
     });
     _persistMessages();
     _scrollToBottom();
-
-    _sendMessage(text);
+    _sendMessage(trimmed, extraMetadata: extraMetadata);
   }
 
-  Future<void> _sendMessage(String text) async {
+  Future<void> _sendMessage(
+    String text, {
+    Map<String, dynamic>? extraMetadata,
+  }) async {
     try {
       final session = AppState.instance.session;
       final metadata = <String, dynamic>{
@@ -574,6 +801,9 @@ class _ChatModalState extends State<ChatModal> {
         if (session != null && session.patientPk != null)
           'patient_pk': session.patientPk,
       };
+      if (extraMetadata != null && extraMetadata.isNotEmpty) {
+        metadata.addAll(extraMetadata);
+      }
       final reply = await _chatService.requestReply(
         text,
         sessionId: _chatSessionId,
@@ -589,6 +819,9 @@ class _ChatModalState extends State<ChatModal> {
             table: reply.table,
           ),
         );
+        if (_isDoctorSelectionPrompt(reply.message)) {
+          _pendingReservationDepartment = _extractDepartmentFromPrompt(reply.message);
+        }
       });
       _persistMessages();
     } on ApiException catch (e) {

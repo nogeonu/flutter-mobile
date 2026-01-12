@@ -254,7 +254,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: _selectedDepartment,
+                        initialValue: _selectedDepartment,
                         decoration: _inputDecoration('진료과'),
                         icon: const Icon(Icons.keyboard_arrow_down_rounded),
                         dropdownColor: Colors.white,
@@ -277,7 +277,7 @@ class _ReservationScreenState extends State<ReservationScreen> {
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<Doctor>(
-                        value: _selectedDoctor,
+                        initialValue: _selectedDoctor,
                         decoration: _inputDecoration('담당 의료진'),
                         icon: const Icon(Icons.keyboard_arrow_down_rounded),
                         dropdownColor: Colors.white,
