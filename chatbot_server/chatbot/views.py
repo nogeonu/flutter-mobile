@@ -115,6 +115,7 @@ def chat_view(request):
         
         if last_bot_message:
             metadata["last_bot_answer"] = last_bot_message
+            logger.info(f"[views] last_bot_answer set: {last_bot_message[:100]}")
         
         for msg in recent_messages:
             if not isinstance(msg.metadata, dict):

@@ -179,8 +179,11 @@ def handle_reservation_followup(
     logger.info(
         f"[reservation_flow] Button click context check: "
         f"department_only={department_only}, "
-        f"last_bot_answer={last_bot_answer[:50] if last_bot_answer else None}, "
+        f"is_department_name_only={is_department_name_only}, "
+        f"has_button_keyword={has_button_keyword}, "
+        f"last_bot_answer={last_bot_answer[:80] if last_bot_answer else None}, "
         f"query={query}, "
+        f"query_stripped={query_stripped}, "
         f"has_button_click_context={has_button_click_context}"
     )
     

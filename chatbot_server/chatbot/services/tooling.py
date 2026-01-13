@@ -1285,7 +1285,8 @@ def _extract_cancel_dates(text: str | None) -> list[date]:
 def _build_reservation_table(items: List[Dict[str, Any]]) -> str:
     if not items:
         return "현재 예약 내역이 없습니다. 원하시면 예약을 도와드리겠습니다. 진료과를 알려주세요."
-    # 카드 섹션으로만 표시하므로 간단한 안내 문구만 반환
+    # 예약 내역은 카드 섹션으로만 표시하므로 간단한 안내 문구만 반환
+    # (의료진 목록은 _build_doctor_table을 별도로 사용하므로 영향 없음)
     return "예약 내역을 아래에 정리해 드리겠습니다."
 
 
