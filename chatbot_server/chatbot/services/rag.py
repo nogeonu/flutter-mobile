@@ -1276,12 +1276,35 @@ def _is_wait_department_prompt(text: str) -> bool:
         ChatMessage.objects.filter(session_id=session_id).order_by("-created_at").first()
     ) if session_id else None
     last_bot_answer = last_message.bot_answer or "" if last_message else ""
-    has_button_click_context = (
+    
+    # 진료과 이름 목록
+    department_names = ["외과", "호흡기내과", "내과", "소아과", "산부인과", "정형외과", "신경과", "정신과", "안과", "이비인후과", "피부과", "비뇨의학과", "영상의학과", "방사선과", "원무과"]
+    query_stripped = query.strip()
+    
+    # 버튼 클릭 감지 키워드 확장
+    button_click_keywords = [
+        "권장드립니다", "예약하기", "진료를 권장", "진료를", "권장", "예약", "진료"
+    ]
+    has_button_keyword = any(keyword in last_bot_answer for keyword in button_click_keywords) if last_bot_answer else False
+    
+    # 진료과 이름만 입력되었는지 확인
+    is_department_only = (
         department
+        and len(query_stripped) <= 15  # 길이 제한 완화
+        and (
+            query_stripped in department_names  # 정확히 진료과 이름 목록에 있거나
+            or query_stripped == department  # 추출된 진료과와 일치
+        )
+        and not any(keyword in query for keyword in ["예약", "진료", "의사", "선생님", "변경", "취소", "날짜", "시간", "예약내역"])
+    )
+    
+    has_button_click_context = (
+        is_department_only
         and last_bot_answer
-        and ("권장드립니다" in last_bot_answer or "예약하기" in last_bot_answer)
-        and len(query.strip()) <= 10  # 짧은 메시지 (진료과 이름만)
-        and not any(keyword in query for keyword in ["예약", "진료", "의사", "선생님", "변경", "취소", "날짜", "시간"])
+        and (
+            has_button_keyword  # 버튼 관련 키워드가 있거나
+            or len(last_bot_answer) > 30  # 이전 메시지가 충분히 긴 경우 (권장 메시지일 가능성)
+        )
     )
     
     # 버튼 클릭 컨텍스트일 때는 의료진 이름 추출을 건너뛰고 바로 의료진 목록 조회

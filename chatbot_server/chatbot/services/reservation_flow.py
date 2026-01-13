@@ -144,24 +144,35 @@ def handle_reservation_followup(
     department_names = ["외과", "호흡기내과", "내과", "소아과", "산부인과", "정형외과", "신경과", "정신과", "안과", "이비인후과", "피부과", "비뇨의학과", "영상의학과", "방사선과", "원무과"]
     
     # 버튼 클릭 컨텍스트: 진료과 이름만 입력되고, 이전 메시지에 권장 메시지가 있는 경우
-    # 또는 단순히 진료과 이름만 입력된 경우 (더 강력한 감지)
+    # 더 단순하고 확실한 감지 로직
     query_stripped = query.strip()
+    
+    # 진료과 이름만 입력되었는지 확인 (더 유연한 체크)
     is_department_name_only = (
         department_only 
-        and query_stripped in department_names  # 정확히 진료과 이름만
         and len(query_stripped) <= 15
         and not any(keyword in query for keyword in reservation_keywords)
+        and (
+            query_stripped in department_names  # 정확히 진료과 이름 목록에 있거나
+            or query_stripped == department_only  # 추출된 진료과와 일치하거나
+            or (len(query_stripped) <= 10 and department_only in query_stripped)  # 진료과 이름이 포함된 경우
+        )
     )
     
+    # 버튼 클릭 감지 키워드 확장
+    button_click_keywords = [
+        "권장드립니다", "예약하기", "진료를 권장", "진료를", "권장", "예약", "진료"
+    ]
+    has_button_keyword = any(keyword in last_bot_answer for keyword in button_click_keywords) if last_bot_answer else False
+    
+    # 버튼 클릭 컨텍스트 감지 (더 관대한 조건)
     has_button_click_context = (
         is_department_name_only
         and last_bot_answer
-        and ("권장드립니다" in last_bot_answer or "예약하기" in last_bot_answer or "진료를 권장" in last_bot_answer or "진료를" in last_bot_answer)
-    ) or (
-        # 더 강력한 감지: 진료과 이름만 입력되고 이전 메시지가 있는 경우
-        is_department_name_only
-        and last_bot_answer
-        and len(last_bot_answer) > 20  # 이전 메시지가 충분히 긴 경우 (권장 메시지일 가능성)
+        and (
+            has_button_keyword  # 버튼 관련 키워드가 있거나
+            or len(last_bot_answer) > 30  # 이전 메시지가 충분히 긴 경우 (권장 메시지일 가능성)
+        )
     )
     
     # 로깅 추가

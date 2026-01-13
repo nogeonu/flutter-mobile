@@ -1285,8 +1285,17 @@ def _extract_cancel_dates(text: str | None) -> list[date]:
 def _build_reservation_table(items: List[Dict[str, Any]]) -> str:
     if not items:
         return "현재 예약 내역이 없습니다. 원하시면 예약을 도와드리겠습니다. 진료과를 알려주세요."
-    # 카드 섹션에 정보가 표시되므로 간단한 메시지만 반환
-    return "예약 내역을 아래에 정리해 드리겠습니다."
+    lines = ["예약 내역을 아래에 정리해 드리겠습니다.", "날짜 | 시간 | 과 | 담당의"]
+    for item in items:
+        raw_time = item.get("scheduled_at") or item.get("requested_time") or ""
+        date_text, time_text = _format_schedule_text(raw_time)
+        department = item.get("department") or "-"
+        raw_doctor = item.get("doctor_name") or ""
+        doctor_name = (
+            _format_doctor_reply_name(raw_doctor) if raw_doctor else "의료진 미지정"
+        )
+        lines.append(f"{date_text} | {time_text} | {department} | {doctor_name}")
+    return "\n".join(lines)
 
 
 def _build_reservation_table_data(items: List[Dict[str, Any]]) -> Dict[str, List[List[str]]]:
