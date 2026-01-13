@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 
 from chatbot.models import ChatMessage
 from chatbot.services.rag import run_rag_with_cache
+from chatbot.services.tooling import execute_tool, build_tool_context
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +110,9 @@ def chat_view(request):
         # 마지막 봇 메시지 찾기 (버튼 클릭 컨텍스트 감지용)
         last_bot_message = None
         for msg in recent_messages:
-            if not msg.is_user and msg.message:
-                last_bot_message = msg.message
+            # ChatMessage 모델에는 is_user 필드가 없음 - bot_answer를 사용
+            if msg.bot_answer:
+                last_bot_message = msg.bot_answer
                 break
         
         if last_bot_message:
@@ -189,3 +191,72 @@ def chat_view(request):
     result_with_id["request_id"] = request_id
     result_with_id["sources"] = hidden_sources
     return JsonResponse(result_with_id, status=200)
+
+
+@csrf_exempt
+@require_POST
+def available_time_slots_view(request):
+    """예약 가능 시간 조회 전용 엔드포인트"""
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError as e:
+        logger.error("available_time_slots_view: JSON decode error: %s", e)
+        return JsonResponse({"error": "잘못된 JSON 형식입니다."}, status=400)
+
+    date_str = payload.get("date")
+    if not date_str:
+        logger.error("available_time_slots_view: date 필드 없음")
+        return JsonResponse({"error": "date 필드가 필요합니다."}, status=400)
+
+    session_id = payload.get("session_id", "")
+    metadata = payload.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    doctor_id = payload.get("doctor_id")
+    doctor_code = payload.get("doctor_code")
+    
+    logger.info(
+        "available_time_slots_view: date=%s doctor_id=%s doctor_code=%s",
+        date_str,
+        doctor_id,
+        doctor_code,
+    )
+
+    try:
+        # Tool 컨텍스트 생성
+        context = build_tool_context(session_id, metadata)
+
+        # Tool 실행
+        args = {
+            "date": date_str,
+        }
+        if doctor_id:
+            args["doctor_id"] = doctor_id
+        if doctor_code:
+            args["doctor_code"] = doctor_code
+
+        result = execute_tool("available_time_slots", args, context)
+        
+        logger.info(
+            "available_time_slots_view: result status=%s booked_times count=%s booked_times=%s",
+            result.get("status"),
+            len(result.get("booked_times", [])),
+            result.get("booked_times", []),
+        )
+
+        return JsonResponse(result, status=200)
+    except Exception as exc:
+        logger.exception("available_time_slots_view: exception: %s", exc)
+        # 에러 발생 시에도 빈 예약 목록 반환 (서버 연결이 끊어지지 않도록)
+        return JsonResponse(
+            {
+                "status": "ok",  # 에러가 있어도 ok로 반환하여 연결 유지
+                "date": date_str,
+                "booked_times": [],
+                "available_slots": [],
+                "all_slots": [],
+                "error": str(exc),
+            },
+            status=200,  # 200으로 반환하여 연결 유지
+        )

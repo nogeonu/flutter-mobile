@@ -1456,6 +1456,7 @@ def execute_tool(name: str, args: Dict[str, Any], context: ToolContext | None) -
         "doctor_list": _doctor_list,
         "notification_send": _notification_send,
         "session_history": _session_history,
+        "available_time_slots": _available_time_slots,
     }
     handler = handlers.get(name)
     if not handler:
@@ -2031,6 +2032,77 @@ def _create_hospital_appointment(
             start_time = _build_asap_datetime()
     end_time = start_time + timedelta(minutes=30)
     now = timezone.localtime(timezone.now())
+    
+    # 같은 시간대에 이미 예약이 있는지 확인
+    with connections["hospital"].cursor() as cursor:
+        # 같은 의료진의 같은 시간대에 예약이 있는지 확인
+        # 30분 단위로 예약되므로 start_time이 정확히 일치하는지 확인
+        doctor_id = doctor_info.get("doctor_id")
+        doctor_code = doctor_info.get("doctor_code")
+        
+        # doctor_id가 문자열이면 정수로 변환 시도
+        if isinstance(doctor_id, str) and doctor_id.isdigit():
+            try:
+                doctor_id = int(doctor_id)
+            except (ValueError, TypeError):
+                pass
+        
+        # 중복 예약 체크 쿼리 (doctor_id와 doctor_code 모두 확인)
+        check_conditions = []
+        check_params = [start_time]
+        
+        if doctor_id:
+            check_conditions.append("doctor_id = %s")
+            check_params.append(doctor_id)
+        
+        if doctor_code:
+            check_conditions.append("UPPER(doctor_code) = UPPER(%s)")
+            check_params.append(doctor_code)
+        
+        if not check_conditions:
+            logger.warning(
+                "duplicate check: no doctor_id or doctor_code provided, skipping duplicate check"
+            )
+        else:
+            check_query = f"""
+                SELECT COUNT(*) as count
+                FROM patients_appointment
+                WHERE start_time = %s
+                  AND status = 'scheduled'
+                  AND ({' OR '.join(check_conditions)})
+            """
+            
+            logger.info(
+                "duplicate check: query=%s params=%s",
+                check_query,
+                check_params,
+            )
+            
+            cursor.execute(check_query, check_params)
+            result = cursor.fetchone()
+            existing_count = result[0] if result else 0
+            
+            logger.info(
+                "duplicate check: existing_count=%s for doctor_id=%s doctor_code=%s start_time=%s",
+                existing_count,
+                doctor_id,
+                doctor_code,
+                start_time,
+            )
+            
+            if existing_count > 0:
+                # 같은 시간대에 이미 예약이 있음
+                logger.warning(
+                    "duplicate appointment attempt: doctor_id=%s doctor_code=%s start_time=%s existing_count=%s",
+                    doctor_id,
+                    doctor_code,
+                    start_time,
+                    existing_count,
+                )
+                raise ValueError(
+                    f"해당 시간대({start_time.strftime('%Y-%m-%d %H:%M')})에 이미 예약이 있습니다. 다른 시간을 선택해주세요."
+                )
+    
     appointment_id = uuid.uuid4().hex
     title = f"{department} 진료 예약"
     memo = reason or "AI 상담 예약 요청"
@@ -2252,6 +2324,15 @@ def _reservation_create(args: Dict[str, Any], context: ToolContext | None) -> Di
                 reason=args.get("reason") or "",
                 doctor_info=doctor_info,
             )
+        except ValueError as exc:
+            # 중복 예약 에러는 사용자에게 명확히 전달
+            error_msg = str(exc)
+            logger.warning("hospital appointment create failed (duplicate): %s", error_msg)
+            return {
+                "status": "error",
+                "message": "duplicate_appointment",
+                "reply_text": error_msg,
+            }
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("hospital appointment create failed: %s", exc)
     if doctor_info:
@@ -2525,6 +2606,9 @@ def _reservation_reschedule(args: Dict[str, Any], context: ToolContext | None) -
     if not new_time_text and not new_department and not (doctor_name or doctor_id):
         return {"status": "error", "message": "new_time or new_department required"}
 
+    # original_time으로 변경할 예약을 찾기
+    original_time_text = args.get("original_time")
+    
     hospital_qs = _get_hospital_reservations_qs()
     if hospital_qs is not None and (hospital_reservation_id or patient_identifier):
         try:
@@ -2533,15 +2617,33 @@ def _reservation_reschedule(args: Dict[str, Any], context: ToolContext | None) -
                 record = hospital_qs.filter(id=hospital_reservation_id).first()
             elif patient_identifier:
                 now = timezone.now()
-                record = (
-                    hospital_qs.filter(
-                        patient_identifier=patient_identifier,
-                        start_time__gte=now,
+                
+                # original_time이 있으면 해당 시간의 예약을 찾기
+                if original_time_text:
+                    try:
+                        original_dt = parse_datetime_with_timezone(original_time_text)
+                        record = (
+                            hospital_qs.filter(
+                                patient_identifier=patient_identifier,
+                                start_time=original_dt,
+                            )
+                            .exclude(status__iexact="cancelled")
+                            .first()
+                        )
+                    except:
+                        pass
+                
+                # original_time으로 못 찾았으면 가장 가까운 미래 예약 찾기
+                if not record:
+                    record = (
+                        hospital_qs.filter(
+                            patient_identifier=patient_identifier,
+                            start_time__gte=now,
+                        )
+                        .exclude(status__iexact="cancelled")
+                        .order_by("start_time")
+                        .first()
                     )
-                    .exclude(status__iexact="cancelled")
-                    .order_by("start_time")
-                    .first()
-                )
             if record:
                 base_dt = record.start_time
                 if timezone.is_naive(base_dt):
@@ -3399,12 +3501,39 @@ def _resolve_doctor_info(
 def _build_doctor_table(doctors: list[dict[str, Any]]) -> Dict[str, List[List[str]]]:
     headers = ["이름", "직책", "연락처"]
     rows: List[List[str]] = []
+    doctor_metadata = []
     for doctor in doctors:
         name = doctor.get("name") or "-"
         title = doctor.get("title") or "-"
         phone = doctor.get("phone") or "-"
-        rows.append([name, title, phone])
-    return {"headers": headers, "rows": rows}
+        row_data = [name, title, phone]
+        rows.append(row_data)
+        
+        # 의료진 정보를 메타데이터로 추가
+        doctor_id = doctor.get("doctor_id") or doctor.get("doctorId")
+        doctor_code = doctor.get("doctor_code") or doctor.get("doctorCode")
+        
+        # doctor_id가 있으면 doctor_code 생성 (형식: D{year}{id:03d})
+        if doctor_id and not doctor_code:
+            try:
+                year = timezone.localdate().year
+                if isinstance(doctor_id, (int, str)):
+                    doctor_id_int = int(doctor_id) if isinstance(doctor_id, str) and doctor_id.isdigit() else doctor_id
+                    if isinstance(doctor_id_int, int):
+                        doctor_code = f"D{year}{doctor_id_int:03d}"
+            except (ValueError, TypeError):
+                pass
+        
+        doctor_metadata.append({
+            "name": name,
+            "doctor_code": doctor_code if doctor_code else None,
+            "doctor_id": str(doctor_id) if doctor_id else None,
+        })
+    return {
+        "headers": headers,
+        "rows": rows,
+        "doctor_metadata": doctor_metadata,  # Flutter에서 사용할 메타데이터
+    }
 
 
 def _doctor_list_via_sql(User: Any, department: str, db_alias: str | None = None) -> list[dict[str, Any]]:
@@ -3647,6 +3776,150 @@ def _doctor_list(args: Dict[str, Any], context: ToolContext | None) -> Dict[str,
             "message": "doctor lookup failed",
             "reply_text": "의료진 정보를 확인하는 데 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         }
+
+
+def _available_time_slots(args: Dict[str, Any], context: ToolContext | None) -> Dict[str, Any]:
+    """
+    특정 날짜와 의료진에 대한 예약 가능 시간대 조회
+    """
+    date_str = args.get("date") or args.get("appointment_date")
+    doctor_id = args.get("doctor_id") or args.get("doctorId")
+    doctor_code = args.get("doctor_code") or args.get("doctorCode")
+    
+    if not date_str:
+        return {
+            "status": "error",
+            "message": "date required",
+            "reply_text": "날짜를 지정해주세요.",
+        }
+    
+    # 날짜 파싱
+    try:
+        if isinstance(date_str, str):
+            # ISO 형식 또는 YYYY-MM-DD 형식
+            if "T" in date_str:
+                appointment_date = datetime.fromisoformat(date_str.split("T")[0]).date()
+            else:
+                appointment_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        else:
+            return {"status": "error", "message": "invalid date format"}
+    except (ValueError, TypeError):
+        return {"status": "error", "message": "invalid date format"}
+    
+    # 예약된 시간대 조회
+    booked_times = []
+    try:
+        # hospital DB에서 SQL 쿼리로 직접 조회 (HospitalReservation 모델에 doctor_id/doctor_code 필드가 없음)
+        if "hospital" in connections.databases:
+            start_datetime = timezone.make_aware(
+                datetime.combine(appointment_date, dt_time.min)
+            )
+            end_datetime = timezone.make_aware(
+                datetime.combine(appointment_date, dt_time.max)
+            )
+            
+            logger.info(
+                "available_time_slots: date=%s doctor_id=%s doctor_code=%s start=%s end=%s",
+                appointment_date,
+                doctor_id,
+                doctor_code,
+                start_datetime,
+                end_datetime,
+            )
+            
+            with connections["hospital"].cursor() as cursor:
+                # SQL 쿼리로 직접 조회
+                query = """
+                    SELECT start_time
+                    FROM patients_appointment
+                    WHERE start_time >= %s
+                      AND start_time <= %s
+                      AND status = 'scheduled'
+                """
+                params = [start_datetime, end_datetime]
+                
+                # 의료진 필터링
+                if doctor_id:
+                    # doctor_id가 문자열이면 정수로 변환 시도
+                    try:
+                        if isinstance(doctor_id, str) and doctor_id.isdigit():
+                            doctor_id_int = int(doctor_id)
+                        else:
+                            doctor_id_int = doctor_id
+                        query += " AND doctor_id = %s"
+                        params.append(doctor_id_int)
+                        logger.info("available_time_slots: filtering by doctor_id=%s", doctor_id_int)
+                    except (ValueError, TypeError):
+                        query += " AND doctor_id = %s"
+                        params.append(doctor_id)
+                        logger.info("available_time_slots: filtering by doctor_id=%s (as string)", doctor_id)
+                
+                if doctor_code:
+                    query += " AND UPPER(doctor_code) = UPPER(%s)"
+                    params.append(doctor_code)
+                    logger.info("available_time_slots: filtering by doctor_code=%s", doctor_code)
+                
+                if not doctor_id and not doctor_code:
+                    logger.warning("available_time_slots: no doctor_id or doctor_code provided, checking all doctors")
+                
+                cursor.execute(query, params)
+                appointments = cursor.fetchall()
+                
+                logger.info(
+                    "available_time_slots: found %s appointments for date %s",
+                    len(appointments),
+                    appointment_date,
+                )
+                
+                for row in appointments:
+                    apt_time = row[0] if isinstance(row, (list, tuple)) else row
+                    if apt_time:
+                        if timezone.is_aware(apt_time):
+                            apt_time = timezone.localtime(apt_time)
+                        else:
+                            apt_time = timezone.make_aware(apt_time)
+                        
+                        hour = apt_time.hour
+                        minute = apt_time.minute
+                        # 30분 단위로 정규화
+                        if minute < 30:
+                            minute = 0
+                        else:
+                            minute = 30
+                        
+                        time_slot = f"{hour:02d}:{minute:02d}"
+                        booked_times.append(time_slot)
+                        logger.debug("available_time_slots: booked time slot %s", time_slot)
+        else:
+            logger.warning("available_time_slots: hospital DB not available")
+    except Exception as exc:
+        logger.exception("available time slots lookup failed: %s", exc)
+    
+    # 전체 시간대 생성 (9:00 ~ 18:00, 30분 단위)
+    all_slots = []
+    for hour in range(9, 19):  # 9시부터 18시까지
+        all_slots.append(f"{hour:02d}:00")
+        if hour < 18:
+            all_slots.append(f"{hour:02d}:30")
+    
+    # 예약 가능한 시간대 계산
+    available_slots = [slot for slot in all_slots if slot not in booked_times]
+    
+    logger.info(
+        "available_time_slots: result - booked=%s (%s) available=%s total=%s",
+        len(booked_times),
+        booked_times,
+        len(available_slots),
+        len(all_slots),
+    )
+    
+    return {
+        "status": "ok",
+        "date": date_str,
+        "booked_times": booked_times,
+        "available_slots": available_slots,
+        "all_slots": all_slots,
+    }
 
 
 def _session_history(args: Dict[str, Any], context: ToolContext | None) -> Dict[str, Any]:

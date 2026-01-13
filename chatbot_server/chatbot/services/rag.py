@@ -1158,6 +1158,28 @@ def _is_wait_department_prompt(text: str) -> bool:
                     "sources": [],
                 }
         if _has_reschedule_cue(query) or auto_reschedule:
+            # 예약 변경 요청 시 먼저 예약 내역을 조회하여 표시
+            tool_context = build_tool_context(session_id, metadata)
+            history_result = execute_tool("reservation_history", {}, tool_context)
+            
+            # 예약 내역이 있으면 카드로 표시
+            if isinstance(history_result, dict) and history_result.get("table"):
+                payload = {
+                    "reply": "변경할 예약을 선택하고 날짜/시간을 변경해주세요.",
+                    "sources": [],
+                    "table": history_result["table"],
+                    "reschedule_mode": True,  # 예약 변경 모드 표시
+                }
+                return payload
+            
+            # 예약 내역이 없으면 안내 메시지
+            if isinstance(history_result, dict) and history_result.get("status") == "not_found":
+                return {
+                    "reply": "변경할 예약이 없습니다. 먼저 예약을 진행해주세요.",
+                    "sources": [],
+                }
+            
+            # 예약 내역 조회 실패 시 기존 로직으로 진행
             new_department = _extract_department(query, metadata)
             has_time_hint = _has_time_or_date_hint(query) or any(
                 marker in query for marker in RESCHEDULE_TIME_KEEP_CUES
@@ -1298,12 +1320,14 @@ def _is_wait_department_prompt(text: str) -> bool:
         and not any(keyword in query for keyword in ["예약", "진료", "의사", "선생님", "변경", "취소", "날짜", "시간", "예약내역"])
     )
     
+    # 버튼 클릭 컨텍스트: 진료과 이름만 입력된 경우
+    # last_bot_answer가 없어도 진료과 이름만 입력되면 버튼 클릭으로 간주
     has_button_click_context = (
         is_department_only
-        and last_bot_answer
         and (
-            has_button_keyword  # 버튼 관련 키워드가 있거나
-            or len(last_bot_answer) > 30  # 이전 메시지가 충분히 긴 경우 (권장 메시지일 가능성)
+            not last_bot_answer  # 이전 메시지가 없으면 버튼 클릭으로 간주
+            or has_button_keyword  # 버튼 관련 키워드가 있거나
+            or (last_bot_answer and len(last_bot_answer) > 30)  # 이전 메시지가 충분히 긴 경우
         )
     )
     
@@ -1545,6 +1569,30 @@ def run_rag(
         medical_history = handle_medical_history(query, session_id, metadata)
         if medical_history:
             return medical_history
+
+        # 예약 변경 요청을 먼저 처리 (handle_reservation_followup보다 먼저)
+        if _has_reschedule_cue(query):
+            if not _has_auth_context(metadata):
+                return {"reply": AUTH_REQUIRED_REPLY, "sources": []}
+            tool_context = build_tool_context(session_id, metadata)
+            history_result = execute_tool("reservation_history", {}, tool_context)
+            
+            # 예약 내역이 있으면 카드로 표시
+            if isinstance(history_result, dict) and history_result.get("table"):
+                payload = {
+                    "reply": "변경할 예약을 선택하고 날짜/시간을 변경해주세요.",
+                    "sources": [],
+                    "table": history_result["table"],
+                    "reschedule_mode": True,  # 예약 변경 모드 표시
+                }
+                return payload
+            
+            # 예약 내역이 없으면 안내 메시지
+            if isinstance(history_result, dict) and history_result.get("status") == "not_found":
+                return {
+                    "reply": "변경할 예약이 없습니다. 먼저 예약을 진행해주세요.",
+                    "sources": [],
+                }
 
         followup = handle_reservation_followup(query, session_id, metadata)
         if followup:
@@ -2031,6 +2079,29 @@ def run_rag(
             if not _has_auth_context(metadata):
                 return {"reply": AUTH_REQUIRED_REPLY, "sources": []}
         if use_tools and tool_name == "reservation_reschedule":
+            # 예약 변경 요청 시 먼저 예약 내역을 조회하여 표시
+            if not _has_auth_context(metadata):
+                return {"reply": AUTH_REQUIRED_REPLY, "sources": []}
+            history_result = execute_tool("reservation_history", {}, tool_context)
+            
+            # 예약 내역이 있으면 카드로 표시
+            if isinstance(history_result, dict) and history_result.get("table"):
+                payload = {
+                    "reply": "변경할 예약을 선택하고 날짜/시간을 변경해주세요.",
+                    "sources": [],
+                    "table": history_result["table"],
+                    "reschedule_mode": True,  # 예약 변경 모드 표시
+                }
+                return payload
+            
+            # 예약 내역이 없으면 안내 메시지
+            if isinstance(history_result, dict) and history_result.get("status") == "not_found":
+                return {
+                    "reply": "변경할 예약이 없습니다. 먼저 예약을 진행해주세요.",
+                    "sources": [],
+                }
+            
+            # 예약 내역 조회 실패 시 기존 로직으로 진행
             new_department = _extract_department(query, metadata)
             reschedule_args: Dict[str, Any] = {}
             if _has_time_or_date_hint(query) or any(
