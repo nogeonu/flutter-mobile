@@ -106,6 +106,16 @@ def chat_view(request):
             "department", "dept"
         ]
         
+        # 마지막 봇 메시지 찾기 (버튼 클릭 컨텍스트 감지용)
+        last_bot_message = None
+        for msg in recent_messages:
+            if not msg.is_user and msg.message:
+                last_bot_message = msg.message
+                break
+        
+        if last_bot_message:
+            metadata["last_bot_answer"] = last_bot_message
+        
         for msg in recent_messages:
             if not isinstance(msg.metadata, dict):
                 continue
