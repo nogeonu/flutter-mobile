@@ -12,6 +12,7 @@ import 'pharmacy_screen.dart';
 import 'reservation_screen.dart';
 import 'waiting_queue_screen.dart';
 import 'hospital_navigation_screen.dart';
+import 'skin_analysis_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -143,6 +144,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const WaitingQueueScreen()));
+        break;
+      case 'skin_analysis':
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SkinAnalysisScreen()));
         break;
       default:
         ScaffoldMessenger.of(context).showSnackBar(

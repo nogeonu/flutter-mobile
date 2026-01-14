@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from chatbot.models import ChatMessage
 from chatbot.services.rag import run_rag_with_cache
 from chatbot.services.tooling import execute_tool, build_tool_context
+from chatbot.services.skin_analysis import get_skin_service
 
 logger = logging.getLogger(__name__)
 
@@ -260,3 +261,49 @@ def available_time_slots_view(request):
             },
             status=200,  # 200으로 반환하여 연결 유지
         )
+
+
+@csrf_exempt
+@require_POST
+def skin_analyze_view(request):
+    """피부 이미지 분석 API"""
+    try:
+        # 이미지 파일 확인
+        if 'image' not in request.FILES:
+            return JsonResponse({
+                "error": "이미지 파일이 필요합니다.",
+                "status": "error"
+            }, status=400)
+        
+        image_file = request.FILES['image']
+        
+        # 파일 크기 제한 (10MB)
+        if image_file.size > 10 * 1024 * 1024:
+            return JsonResponse({
+                "error": "이미지 크기는 10MB 이하여야 합니다.",
+                "status": "error"
+            }, status=400)
+        
+        # 이미지 읽기
+        image_bytes = image_file.read()
+        
+        logger.info(f"피부 분석 요청: 파일명={image_file.name}, 크기={image_file.size} bytes")
+        
+        # 피부 분석 서비스 호출
+        skin_service = get_skin_service()
+        result = skin_service.predict(image_bytes)
+        
+        if result.get('status') == 'success':
+            logger.info(f"피부 분석 완료: {result.get('predicted_class')} (신뢰도: {result.get('confidence'):.2%})")
+        else:
+            logger.error(f"피부 분석 실패: {result.get('message')}")
+        
+        return JsonResponse(result, status=200)
+        
+    except Exception as e:
+        logger.error(f"피부 분석 API 오류: {e}", exc_info=True)
+        return JsonResponse({
+            "error": "서버 오류가 발생했습니다.",
+            "status": "error",
+            "message": str(e)
+        }, status=500)

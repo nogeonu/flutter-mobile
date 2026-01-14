@@ -40,6 +40,12 @@ const featureItems = [
     icon: Icons.timer_outlined,
   ),
   FeatureItem(
+    id: 'skin_analysis',
+    title: 'AI 피부 분석',
+    description: '피부 질환 AI 진단',
+    icon: Icons.face_outlined,
+  ),
+  FeatureItem(
     id: 'pharmacy',
     title: '약국 안내',
     description: '내원 환자 전용 약국',
