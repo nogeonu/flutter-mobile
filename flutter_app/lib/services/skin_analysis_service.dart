@@ -81,7 +81,7 @@ class SkinAnalysisService {
   final String baseUrl;
 
   SkinAnalysisService({String? baseUrl})
-      : baseUrl = baseUrl ?? ApiConfig.baseUrl;
+      : baseUrl = baseUrl ?? ApiConfig.chatbotBaseUrl;
 
   Future<SkinAnalysisResult> analyzeImage(File imageFile) async {
     try {

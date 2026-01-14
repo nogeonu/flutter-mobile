@@ -7,7 +7,7 @@ class ApiConfig {
 
   static const String _localBaseUrl = 'http://192.168.41.140:8000'; // Wi-Fi 네트워크 IP (테스트용)
   static const String _remoteBaseUrl = 'http://34.42.223.43'; // GCP 서버 (Nginx 프록시)
-  
+
   // 챗봇 서버 URL (8001 포트)
   static const String _chatbotBaseUrl = 'http://34.42.223.43:8001';
 
