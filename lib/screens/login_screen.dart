@@ -283,14 +283,36 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextButton(onPressed: () {}, child: const Text('비밀번호 찾기')),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 56,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF2253A5),
+                      Color(0xFF3D6BC7),
+                      Color(0xFF5B8FD8),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withOpacity(0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                      spreadRadius: 0,
+                    ),
+                  ],
+                ),
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -298,19 +320,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: _isLoading
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                          width: 20,
+                          height: 20,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                            strokeWidth: 2.5,
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
                     : const Text(
                         '로그인',
                         style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
                     color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
                   ),
                 ),
               ),
@@ -383,13 +407,20 @@ class _LoginField extends StatelessWidget {
           controller: controller,
           keyboardType: keyboardType,
           obscureText: obscureText,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 15,
+            color: const Color(0xFF1E2432),
+          ),
           decoration: InputDecoration(
             hintText: hintText,
+            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF9AA4B2),
+            ),
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 16,
+              horizontal: 20,
+              vertical: 18,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -397,13 +428,13 @@ class _LoginField extends StatelessWidget {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.black.withOpacity(0.04)),
+              borderSide: BorderSide(color: Colors.black.withOpacity(0.06)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: Theme.of(context).colorScheme.primary,
-                width: 1.4,
+                color: theme.colorScheme.primary,
+                width: 2,
               ),
             ),
             suffixIcon: suffix,

@@ -72,17 +72,36 @@ class _MainShellState extends State<MainShell> {
 
     return Scaffold(
       body: SafeArea(bottom: false, child: _pages[_selectedIndex]),
-      bottomNavigationBar: BottomNavigationBar(
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
         currentIndex: _selectedIndex,
         items: navItems,
         type: BottomNavigationBarType.fixed,
         onTap: _onItemTapped,
         selectedItemColor: Theme.of(context).colorScheme.primary,
         unselectedItemColor: const Color(0xFF9AA4B2),
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
+          selectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
         showUnselectedLabels: true,
         backgroundColor: Colors.white,
+          elevation: 0,
+        ),
       ),
     );
   }

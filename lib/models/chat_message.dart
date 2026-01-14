@@ -16,13 +16,21 @@ class ChatMessage {
           .map((b) => b as Map<String, dynamic>)
           .toList();
     }
+    
+    // table에 reschedule_mode 포함
+    Map<String, dynamic>? table = json['table'] as Map<String, dynamic>?;
+    if (table != null && json['reschedule_mode'] == true) {
+      table = Map<String, dynamic>.from(table);
+      table['reschedule_mode'] = true;
+    }
+    
     return ChatMessage(
       id: json['request_id'] as String? ?? '',
       message: json['reply'] as String? ?? '',
       isUser: false,
       timestamp: DateTime.now(),
       sources: json['sources'] as List<dynamic>?,
-      table: json['table'] as Map<String, dynamic>?,
+      table: table,
       buttons: buttons,
     );
   }

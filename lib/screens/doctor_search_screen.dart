@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/doctor.dart';
 import '../services/doctor_repository.dart';
+import 'doctor_detail_screen.dart';
 
 class DoctorSearchScreen extends StatefulWidget {
   const DoctorSearchScreen({super.key});
@@ -211,7 +212,16 @@ class _DoctorSearchScreenState extends State<DoctorSearchScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final doctor = doctors[index];
-                    return _DoctorCard(doctor: doctor);
+                    return _DoctorCard(
+                      doctor: doctor,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => DoctorDetailScreen(doctor: doctor),
+                          ),
+                        );
+                      },
+                    );
                   },
                 ),
               ),
@@ -223,9 +233,10 @@ class _DoctorSearchScreenState extends State<DoctorSearchScreen> {
 }
 
 class _DoctorCard extends StatelessWidget {
-  const _DoctorCard({required this.doctor});
+  const _DoctorCard({required this.doctor, this.onTap});
 
   final Doctor doctor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -240,7 +251,13 @@ class _DoctorCard extends StatelessWidget {
     final username =
         doctor.username.isEmpty ? '미등록' : doctor.username;
 
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -309,6 +326,8 @@ class _DoctorCard extends StatelessWidget {
             value: username,
           ),
         ],
+          ),
+        ),
       ),
     );
   }

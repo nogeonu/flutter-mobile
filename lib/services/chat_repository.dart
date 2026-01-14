@@ -65,6 +65,67 @@ class ChatRepository {
     throw ApiException(500, '챗봇 응답 형식이 올바르지 않습니다.');
   }
 
+  /// 예약 가능 시간 조회
+  Future<Map<String, dynamic>> getAvailableTimeSlots({
+    required String date,
+    String? doctorId,
+    String? doctorCode,
+    String? sessionId,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final body = {
+      'date': date,
+      'session_id': sessionId ?? '',
+      if (doctorId != null) 'doctor_id': doctorId,
+      if (doctorCode != null) 'doctor_code': doctorCode,
+      'metadata': metadata ?? {},
+    };
+
+    print('[ChatRepository] 예약 가능 시간 조회: date=$date, doctorId=$doctorId, doctorCode=$doctorCode');
+    print('[ChatRepository] 요청 본문: ${jsonEncode(body)}');
+
+    final url = Uri.parse('${ApiConfig.chatbotBaseUrl}/api/chat/available-time-slots/');
+    print('[ChatRepository] 요청 URL: $url');
+    
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(body),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw ApiException(
+            408,
+            '예약 가능 시간 조회 시간 초과',
+          );
+        },
+      );
+
+      print('[ChatRepository] 응답 상태: ${response.statusCode}');
+      print('[ChatRepository] 응답 본문: ${response.body}');
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ApiException(
+          response.statusCode,
+          '예약 가능 시간 조회 실패: ${response.body}',
+        );
+      }
+
+      final data = jsonDecode(response.body);
+      return data as Map<String, dynamic>;
+    } on http.ClientException catch (e) {
+      print('[ChatRepository] 클라이언트 예외: $e');
+      rethrow;
+    } catch (e) {
+      print('[ChatRepository] 예외 발생: $e');
+      rethrow;
+    }
+  }
+
   void dispose() {
     _client.close();
   }
