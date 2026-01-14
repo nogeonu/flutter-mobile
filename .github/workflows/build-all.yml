@@ -32,16 +32,20 @@ jobs:
           channel: 'stable'
       
       - name: 📦 Install dependencies
+        working-directory: ./flutter_app
         run: flutter pub get
       
       - name: 🔍 Analyze code
+        working-directory: ./flutter_app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
       
       - name: 🏗️ Build APK
+        working-directory: ./flutter_app
         run: flutter build apk --release
       
       - name: 📝 Get version info
         id: version
+        working-directory: ./flutter_app
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
@@ -52,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 5
       
       - name: ✅ Android Build Success
@@ -72,18 +76,22 @@ jobs:
           channel: 'stable'
       
       - name: 📦 Install dependencies
+        working-directory: ./flutter_app
         run: flutter pub get
       
       - name: 🍎 Install CocoaPods
+        working-directory: ./flutter_app
         run: |
           cd ios
           pod install
           cd ..
       
       - name: 🏗️ Build iOS (No Codesign)
+        working-directory: ./flutter_app
         run: flutter build ios --release --no-codesign
       
       - name: 📦 Create IPA
+        working-directory: ./flutter_app
         run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
@@ -92,6 +100,7 @@ jobs:
       
       - name: 📝 Get version info
         id: version
+        working-directory: ./flutter_app
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
@@ -102,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: konyang-hospital-app.ipa
+          path: flutter_app/konyang-hospital-app.ipa
           retention-days: 5
       
       - name: ✅ iOS Build Success
@@ -118,6 +127,7 @@ jobs:
       
       - name: 📝 Get version info
         id: version
+        working-directory: ./flutter_app
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           BUILD_NUMBER=$(grep 'version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f2)
