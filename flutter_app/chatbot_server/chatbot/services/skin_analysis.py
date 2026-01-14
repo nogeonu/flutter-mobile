@@ -167,14 +167,12 @@ class SkinAnalysisService:
             # 히트맵 생성 (선택사항)
             heatmap_base64 = None
             try:
-                # 원본 이미지 로드 (히트맵용)
-                original_image = Image.open(io.BytesIO(image_bytes))
-                original_image = original_image.convert('RGB')
-                original_array = np.array(original_image.resize((224, 224)))
-                heatmap = self.generate_heatmap(original_array, predicted_class_idx)
+                # 히트맵 생성을 위해 이미지 재전처리 (gradient 계산을 위해)
+                heatmap_image = self.preprocess_image(image_bytes)
+                heatmap = self.generate_gradcam_heatmap(heatmap_image, predicted_class_idx)
                 heatmap_base64 = self.heatmap_to_base64(heatmap, image_bytes)
             except Exception as e:
-                logger.warning(f"히트맵 생성 실패: {e}")
+                logger.warning(f"히트맵 생성 실패: {e}", exc_info=True)
             
             return {
                 "status": "success",
@@ -193,30 +191,82 @@ class SkinAnalysisService:
                 "message": f"분석 중 오류가 발생했습니다: {str(e)}"
             }
     
-    def generate_heatmap(self, image: np.ndarray, predicted_class: int) -> np.ndarray:
-        """Grad-CAM 기반 히트맵 생성 (간단한 버전)"""
+    def generate_gradcam_heatmap(self, image_tensor: torch.Tensor, predicted_class: int) -> np.ndarray:
+        """Grad-CAM 기반 히트맵 생성"""
         try:
-            # 이미지를 0-1 범위로 정규화
-            if image.max() > 1.0:
-                heatmap = image.astype(np.float32) / 255.0
-            else:
-                heatmap = image.astype(np.float32)
-            heatmap = np.clip(heatmap, 0, 1)
+            # 모델을 학습 모드로 전환 (gradient 계산을 위해)
+            self.model.train()
             
-            # 간단한 히트맵 효과 (실제로는 Grad-CAM 사용 권장)
-            # 중앙 영역을 강조
-            center_y, center_x = 112, 112
-            y, x = np.ogrid[:224, :224]
-            mask = np.exp(-((x - center_x)**2 + (y - center_y)**2) / (2 * 50**2))
+            # 입력 이미지에 gradient 계산 활성화
+            image_tensor.requires_grad_(True)
             
-            # 히트맵 적용
-            heatmap_red = heatmap.copy()
-            heatmap_red[:, :, 0] = np.clip(heatmap_red[:, :, 0] + mask * 0.3, 0, 1)
+            # MobileNetV2의 마지막 컨볼루션 레이어 활성화 가져오기
+            # features 레이어의 마지막 블록 사용
+            activations = []
+            gradients = []
             
-            return heatmap_red
+            def forward_hook(module, input, output):
+                activations.append(output)
+            
+            def backward_hook(module, grad_input, grad_output):
+                gradients.append(grad_output[0])
+            
+            # MobileNetV2의 마지막 컨볼루션 레이어에 hook 등록
+            # features[-1]이 마지막 InvertedResidual 블록
+            handle_forward = self.model.features[-1].register_forward_hook(forward_hook)
+            handle_backward = self.model.features[-1].register_backward_hook(backward_hook)
+            
+            try:
+                # Forward pass
+                output = self.model(image_tensor)
+                
+                # 예측된 클래스에 대한 gradient 계산
+                self.model.zero_grad()
+                output[0][predicted_class].backward(retain_graph=True)
+                
+                # Gradient와 활성화 가져오기
+                if len(gradients) > 0 and len(activations) > 0:
+                    grad = gradients[0]
+                    act = activations[0]
+                    
+                    # Gradient의 평균 계산 (채널별)
+                    weights = torch.mean(grad, dim=(2, 3), keepdim=True)
+                    
+                    # 가중치를 적용한 활성화
+                    cam = torch.sum(weights * act, dim=1, keepdim=True)
+                    cam = torch.relu(cam)  # ReLU로 음수 제거
+                    
+                    # 정규화
+                    cam = cam.squeeze().cpu().numpy()
+                    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+                    
+                    # 224x224로 리사이즈
+                    from scipy.ndimage import zoom
+                    cam_resized = zoom(cam, (224 / cam.shape[0], 224 / cam.shape[1]))
+                    
+                    return cam_resized
+                else:
+                    # Fallback: 간단한 히트맵
+                    return self._generate_simple_heatmap()
+                    
+            finally:
+                handle_forward.remove()
+                handle_backward.remove()
+                self.model.eval()
+                image_tensor.requires_grad_(False)
+                
         except Exception as e:
-            logger.error(f"히트맵 생성 실패: {e}")
-            return image
+            logger.error(f"Grad-CAM 히트맵 생성 실패: {e}", exc_info=True)
+            # Fallback: 간단한 히트맵
+            return self._generate_simple_heatmap()
+    
+    def _generate_simple_heatmap(self) -> np.ndarray:
+        """간단한 히트맵 생성 (Fallback)"""
+        # 중앙 영역을 강조하는 간단한 히트맵
+        center_y, center_x = 112, 112
+        y, x = np.ogrid[:224, :224]
+        mask = np.exp(-((x - center_x)**2 + (y - center_y)**2) / (2 * 50**2))
+        return mask
     
     def heatmap_to_base64(self, heatmap: np.ndarray, original_image_bytes: bytes) -> str:
         """히트맵을 Base64 인코딩된 이미지로 변환"""
@@ -224,16 +274,34 @@ class SkinAnalysisService:
             # 원본 이미지 로드
             original_image = Image.open(io.BytesIO(original_image_bytes))
             original_image = original_image.convert('RGB')
-            original_image = original_image.resize((224, 224), Image.Resampling.LANCZOS)
+            original_array = np.array(original_image.resize((224, 224), Image.Resampling.LANCZOS))
             
-            # 히트맵을 0-255 범위로 변환
-            heatmap_uint8 = (heatmap * 255).astype(np.uint8)
-            
-            # PIL 이미지로 변환
-            heatmap_image = Image.fromarray(heatmap_uint8)
-            
-            # 원본 이미지와 블렌딩
-            blended = Image.blend(original_image, heatmap_image, alpha=0.5)
+            # 히트맵을 0-255 범위로 변환 (2D 배열)
+            if len(heatmap.shape) == 2:
+                heatmap_normalized = (heatmap * 255).astype(np.uint8)
+                
+                # 컬러맵 적용 (빨강-노랑 히트맵)
+                try:
+                    from matplotlib import colormaps
+                    colormap = colormaps['jet']
+                except (ImportError, KeyError):
+                    import matplotlib.cm as cm
+                    colormap = cm.get_cmap('jet')
+                heatmap_colored = colormap(heatmap)[:, :, :3]  # RGB만
+                heatmap_colored = (heatmap_colored * 255).astype(np.uint8)
+                
+                # 원본 이미지와 히트맵 블렌딩
+                heatmap_resized = Image.fromarray(heatmap_colored).resize(
+                    (original_array.shape[1], original_array.shape[0]), 
+                    Image.Resampling.LANCZOS
+                )
+                original_pil = Image.fromarray(original_array)
+                
+                # 블렌딩 (히트맵 강도 조절)
+                blended = Image.blend(original_pil, heatmap_resized, alpha=0.4)
+            else:
+                # Fallback: 원본 이미지만 반환
+                blended = Image.fromarray(original_array)
             
             # Base64 인코딩
             buffer = io.BytesIO()
@@ -242,7 +310,7 @@ class SkinAnalysisService:
             
             return f"data:image/png;base64,{img_str}"
         except Exception as e:
-            logger.error(f"히트맵 인코딩 실패: {e}")
+            logger.error(f"히트맵 인코딩 실패: {e}", exc_info=True)
             return ""
 
 # 전역 서비스 인스턴스 (싱글톤)
