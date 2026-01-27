@@ -107,6 +107,33 @@ class AppointmentRepository {
     return const [];
   }
 
+  /// 의사별 예약 목록 조회 (doctor_code로)
+  Future<List<Appointment>> fetchDoctorAppointments(String doctorCode) async {
+    final data = await _client.get(
+      '/api/patients/appointments/',
+      query: {'doctor_code': doctorCode},
+    );
+
+    if (data is List) {
+      return data
+          .whereType<Map<String, dynamic>>()
+          .map(Appointment.fromJson)
+          .toList();
+    }
+
+    if (data is Map<String, dynamic>) {
+      final results = data['results'];
+      if (results is List) {
+        return results
+            .whereType<Map<String, dynamic>>()
+            .map(Appointment.fromJson)
+            .toList();
+      }
+    }
+
+    return const [];
+  }
+
   /// 예약 취소
   Future<void> cancelAppointment(String appointmentId) async {
     await _client.put(

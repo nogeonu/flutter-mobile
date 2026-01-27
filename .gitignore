@@ -43,8 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-node_modules/
-.vscode/
-__pycache__/
+chatbot_server/.env
+chatbot_server/chatbot_server.tar.gz
 *.pyc
-.env
+__pycache__/
