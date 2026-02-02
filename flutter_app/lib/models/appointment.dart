@@ -88,19 +88,28 @@ class Appointment {
       return null;
     }
 
+    final rawId = json['id'];
+    final id = rawId == null
+        ? ''
+        : (rawId is int ? rawId.toString() : rawId as String);
+    final rawStatus = json['status'] as String? ?? 'scheduled';
+    final status = rawStatus.toLowerCase();
+
     return Appointment(
-      id: json['id'] as String,
+      id: id,
       title: json['title'] as String? ?? '',
       type: json['type'] as String? ?? '예약',
       startTime: DateTime.parse(json['start_time'] as String),
       endTime: parseDateTime(json['end_time']),
-      status: json['status'] as String? ?? 'scheduled',
+      status: status.isEmpty ? 'scheduled' : status,
       memo: json['memo'] as String?,
       patientId: json['patient_id'] as String?,
       patientName: json['patient_name'] as String?,
       patientGender: json['patient_gender'] as String?,
       patientAge: json['patient_age'] as int?,
-      doctorId: json['doctor'] as int,
+      doctorId: (json['doctor'] is int)
+          ? json['doctor'] as int
+          : int.tryParse(json['doctor'].toString()) ?? 0,
       doctorUsername: json['doctor_username'] as String? ?? '',
       doctorName: json['doctor_name'] as String?,
       doctorDepartment: json['doctor_department'] as String?,

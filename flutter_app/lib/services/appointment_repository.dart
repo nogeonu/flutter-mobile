@@ -79,19 +79,37 @@ class AppointmentRepository {
   }
 
   /// 내 예약 목록 조회 (환자 ID로)
+  /// - 먼저 my_appointments/ 시도, 실패 시 appointments/?patient_id= 로 폴백
   Future<List<Appointment>> fetchMyAppointments(String patientId) async {
+    final query = {'patient_id': patientId};
+
+    // 1) 문서 기준: patient_id별 목록은 my_appointments/ 에서 제공할 수 있음
+    try {
+      final data = await _client.get(
+        '/api/patients/appointments/my_appointments/',
+        query: query,
+      );
+      final list = _parseAppointmentList(data);
+      if (list.isNotEmpty) return list;
+    } catch (_) {
+      // 404 등이면 아래 기본 엔드포인트로 폴백
+    }
+
+    // 2) 기본: /api/patients/appointments/?patient_id=XXX
     final data = await _client.get(
       '/api/patients/appointments/',
-      query: {'patient_id': patientId},
+      query: query,
     );
+    return _parseAppointmentList(data);
+  }
 
+  static List<Appointment> _parseAppointmentList(dynamic data) {
     if (data is List) {
       return data
           .whereType<Map<String, dynamic>>()
           .map(Appointment.fromJson)
           .toList();
     }
-
     if (data is Map<String, dynamic>) {
       final results = data['results'];
       if (results is List) {
@@ -101,7 +119,6 @@ class AppointmentRepository {
             .toList();
       }
     }
-
     return const [];
   }
 
@@ -111,25 +128,7 @@ class AppointmentRepository {
       '/api/patients/appointments/',
       query: {'doctor_code': doctorCode},
     );
-
-    if (data is List) {
-      return data
-          .whereType<Map<String, dynamic>>()
-          .map(Appointment.fromJson)
-          .toList();
-    }
-
-    if (data is Map<String, dynamic>) {
-      final results = data['results'];
-      if (results is List) {
-        return results
-            .whereType<Map<String, dynamic>>()
-            .map(Appointment.fromJson)
-            .toList();
-      }
-    }
-
-    return const [];
+    return _parseAppointmentList(data);
   }
 
   /// 예약 취소

@@ -1499,6 +1499,26 @@ def _get_hospital_reservations_qs_for_alias(alias: str) -> Any | None:
         return None
 
 
+def _get_hospital_history_items(
+    base_qs: Any,
+    patient_identifier: str,
+    now: Any,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """병원 DB(또는 지정 alias)에서 patient_identifier 기준 미래 예약만 payload 리스트로 반환."""
+    if base_qs is None or not patient_identifier:
+        return []
+    try:
+        base = base_qs.filter(patient_identifier=patient_identifier).exclude(
+            status__iexact="cancelled"
+        )
+        records = list(base.filter(start_time__gte=now).order_by("start_time")[: limit + 50])
+        return [_hospital_reservation_payload(r) for r in records]
+    except Exception as exc:  # pragma: no cover
+        logger.warning("_get_hospital_history_items failed: %s", exc)
+        return []
+
+
 def _get_hospital_patient_info(patient_identifier: str) -> Dict[str, Any] | None:
     if not patient_identifier:
         return None
@@ -2882,31 +2902,74 @@ def _reservation_history(args: Dict[str, Any], context: ToolContext | None) -> D
     if not patient_identifier and patient_phone_raw:
         patient_identifier = _lookup_patient_identifier_by_phone(patient_phone_raw)
 
-    def _build_hospital_history(base_qs: Any) -> Dict[str, Any]:
-        base = base_qs.filter(patient_identifier=patient_identifier).exclude(status__iexact="cancelled")
-        now = timezone.now()
+    now = timezone.now()
+    # 웹(EventEye /patient/doctors) + 챗봇/모바일 예약 통합: hospital DB와 default DB(웹) 둘 다 조회 후 병합
+    all_items: List[Dict[str, Any]] = []
+    seen_ids: set = set()
+
+    hospital_qs = _get_hospital_reservations_qs()
+    if hospital_qs is not None and patient_identifier:
+        items_hospital = _get_hospital_history_items(
+            hospital_qs, patient_identifier, now, limit + offset + 10
+        )
+        for item in items_hospital:
+            rid = item.get("id")
+            if rid and rid not in seen_ids:
+                seen_ids.add(rid)
+                all_items.append(item)
+
+    # default DB(웹 예약 저장소)에서도 조회하여 병합 (원무과 reservation-info와 동일하게 통합 표시)
+    fallback_qs = _get_hospital_reservations_qs_for_alias("default")
+    if (
+        fallback_qs is not None
+        and patient_identifier
+        and (hospital_qs is None or getattr(fallback_qs, "_db", "default") != getattr(hospital_qs, "_db", "hospital"))
+    ):
+        try:
+            items_default = _get_hospital_history_items(
+                fallback_qs, patient_identifier, now, limit + offset + 10
+            )
+            for item in items_default:
+                rid = item.get("id")
+                if rid and rid not in seen_ids:
+                    seen_ids.add(rid)
+                    all_items.append(item)
+            if items_default:
+                logger.info(
+                    "reservation_history: merged default db items patient_identifier=%s count=%s total=%s",
+                    patient_identifier,
+                    len(items_default),
+                    len(all_items),
+                )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("default db reservation history failed: %s", exc)
+
+    # 병합된 목록을 scheduled_at 기준 정렬
+    def _sort_key(it: Dict[str, Any]) -> str:
+        return (it.get("scheduled_at") or it.get("requested_time") or "")[:19]
+
+    all_items.sort(key=_sort_key)
+
+    if all_items:
         if reply_style == "single":
-            upcoming = list(base.filter(start_time__gte=now).order_by("start_time")[: offset + 1])
-            record = upcoming[offset] if len(upcoming) > offset else None
-            if not record:
-                if offset > 0:
-                    message = "다음 예약이 없습니다. 다른 일정이 필요하시면 알려주세요."
-                else:
-                    message = (
-                        "현재 예정된 예약이 없습니다. 원하시면 예약을 도와드리겠습니다. "
-                        "진료과를 알려주세요."
-                    )
-                return {"status": "ok", "reservations": [], "reply_text": message}
-            payload = _hospital_reservation_payload(record)
-            table = _build_reservation_table_data([payload])
-            return {
-                "status": "ok",
-                "reservations": [payload],
-                "reply_text": _format_reservation_single(payload, str(label)),
-                "table": table,
-            }
-        records = list(base.filter(start_time__gte=now).order_by("start_time")[:limit])
-        items = [_hospital_reservation_payload(r) for r in records]
+            record_at_offset = all_items[offset] if len(all_items) > offset else None
+            if record_at_offset:
+                table = _build_reservation_table_data([record_at_offset])
+                return {
+                    "status": "ok",
+                    "reservations": [record_at_offset],
+                    "reply_text": _format_reservation_single(record_at_offset, str(label)),
+                    "table": table,
+                }
+            if offset > 0:
+                message = "다음 예약이 없습니다. 다른 일정이 필요하시면 알려주세요."
+            else:
+                message = (
+                    "현재 예정된 예약이 없습니다. 원하시면 예약을 도와드리겠습니다. "
+                    "진료과를 알려주세요."
+                )
+            return {"status": "ok", "reservations": [], "reply_text": message}
+        items = all_items[offset : offset + limit]
         table = _build_reservation_table_data(items)
         return {
             "status": "ok",
@@ -2914,31 +2977,6 @@ def _reservation_history(args: Dict[str, Any], context: ToolContext | None) -> D
             "reply_text": _build_reservation_table(items),
             "table": table,
         }
-
-    hospital_qs = _get_hospital_reservations_qs()
-    if hospital_qs is not None and patient_identifier:
-        try:
-            response = _build_hospital_history(hospital_qs)
-            if response.get("reservations"):
-                return response
-            fallback_qs = _get_hospital_reservations_qs_for_alias("default")
-            if fallback_qs is not None and getattr(fallback_qs, "_db", "default") != getattr(
-                hospital_qs, "_db", "hospital"
-            ):
-                fallback_response = _build_hospital_history(fallback_qs)
-                if fallback_response.get("reservations"):
-                    return fallback_response
-            return response
-        except Exception as exc:  # pragma: no cover
-            logger.warning("hospital reservation history failed: %s", exc)
-            fallback_qs = _get_hospital_reservations_qs_for_alias("default")
-            if fallback_qs is not None:
-                try:
-                    fallback_response = _build_hospital_history(fallback_qs)
-                    if fallback_response.get("reservations") or reply_style == "single":
-                        return fallback_response
-                except Exception as fallback_exc:  # pragma: no cover
-                    logger.warning("hospital reservation history fallback failed: %s", fallback_exc)
 
     if patient_identifier and not patient_phone and not session_id:
         if reply_style == "single":

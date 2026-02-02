@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/appointment.dart';
@@ -125,9 +126,15 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         appointments = await _appointmentRepository.fetchMyAppointments(session.patientId);
         appointments.sort((a, b) => a.startTime.compareTo(b.startTime));
-      } catch (appointmentError) {
+        assert(() {
+          // 디버그: 마이페이지 예약 개수 확인 (다가오는 일정 미표시 시 원인 파악용)
+          debugPrint('[마이페이지] patientId=${session.patientId}, 예약 수=${appointments.length}');
+          return true;
+        }());
+      } catch (appointmentError, stack) {
         // 예약 API가 아직 준비되지 않았거나 데이터가 없으면 빈 리스트 사용
-        // 에러는 조용히 무시
+        debugPrint('[마이페이지] 예약 조회 실패: $appointmentError');
+        debugPrint(stack.toString());
       }
       
       if (!mounted) return;
@@ -445,6 +452,17 @@ class _LoginField extends StatelessWidget {
   }
 }
 
+/// 다가오는 일정: status가 scheduled이고 startTime이 현재 이후인 예약 중 가장 가까운 것
+Appointment? _nextUpcomingAppointment(List<Appointment> appointments) {
+  final now = DateTime.now();
+  final upcoming = appointments
+      .where((a) =>
+          (a.status.toLowerCase() == 'scheduled') && a.startTime.isAfter(now))
+      .toList()
+    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  return upcoming.isNotEmpty ? upcoming.first : null;
+}
+
 class _MyPageView extends StatelessWidget {
   const _MyPageView({
     required this.session,
@@ -552,9 +570,7 @@ class _MyPageView extends StatelessWidget {
             visitsThisYear: visitsThisYear,
             recentRecord: completed.isNotEmpty ? completed.first : null,
             upcomingRecord: upcoming.isNotEmpty ? upcoming.first : null,
-            upcomingAppointment: appointments.where((a) => a.status == 'scheduled' && a.startTime.isAfter(DateTime.now())).isNotEmpty
-                ? appointments.where((a) => a.status == 'scheduled' && a.startTime.isAfter(DateTime.now())).first
-                : null,
+            upcomingAppointment: _nextUpcomingAppointment(appointments),
           ),
           const SizedBox(height: 20),
           if (isLoading)
