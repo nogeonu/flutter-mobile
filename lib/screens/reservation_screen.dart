@@ -97,7 +97,13 @@ class _ReservationScreenState extends State<ReservationScreen> {
         }
       }
       
-      final depts = doctors.map((d) => d.department).where((d) => d.isNotEmpty).toSet().toList();
+      // 진료 예약에서 선택 가능한 진료과: 외과, 호흡기내과만 표시 (검사실, admin 등 제외)
+      const allowedDepartments = {'외과', '호흡기내과'};
+      final depts = doctors
+          .map((d) => d.department)
+          .where((d) => d.isNotEmpty && allowedDepartments.contains(d))
+          .toSet()
+          .toList();
       depts.sort();
       print('[예약] 진료과 ${depts.length}개: $depts');
       
