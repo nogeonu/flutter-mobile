@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from chatbot.models import ChatMessage
 from chatbot.services.rag import run_rag_with_cache
 from chatbot.services.tooling import execute_tool, build_tool_context
+from chatbot.services.skin_analysis import get_skin_service
 
 logger = logging.getLogger(__name__)
 
@@ -166,30 +167,40 @@ def chat_view(request):
             )
             result = run_rag_with_cache(message, session_id=session_id, metadata=metadata)
         except FileNotFoundError as exc:
-            return JsonResponse(
-                {
-                    "error": "지식 베이스가 준비되지 않았습니다. 먼저 문서를 색인화해주세요.",
-                    "detail": str(exc),
-                },
-                status=503,
-            )
+            logger.warning("chat FileNotFoundError: %s", exc)
+            result = {
+                "reply": "죄송합니다. 지식 베이스가 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+                "sources": [],
+            }
         except ValueError as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
+            logger.warning("chat ValueError: %s", exc)
+            result = {
+                "reply": "죄송합니다. 요청을 처리할 수 없습니다. 다시 말씀해 주시거나 전화(1577-3330)로 문의해 주세요.",
+                "sources": [],
+            }
         except Exception as exc:  # pragma: no cover
-            return JsonResponse({"error": f"RAG 파이프라인 오류: {exc}"}, status=500)
+            logger.exception("chat run_rag_with_cache failed: %s", exc)
+            # 예약 등에서 오류가 나도 앱에서 500 대신 안내 메시지가 보이도록 200 + reply 반환
+            result = {
+                "reply": "죄송합니다. 예약 처리 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주시거나, 전화(1577-3330)로 예약해 주세요.",
+                "sources": [],
+            }
 
     hidden_sources = []
-    ChatMessage.objects.create(
-        session_id=session_id,
-        user_question=message,
-        bot_answer=result.get("reply", ""),
-        sources=hidden_sources,
-        metadata=metadata,
-    )
+    try:
+        ChatMessage.objects.create(
+            session_id=session_id,
+            user_question=message,
+            bot_answer=result.get("reply", ""),
+            sources=hidden_sources,
+            metadata=metadata,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.warning("ChatMessage create failed (continuing): %s", exc)
 
     result_with_id = dict(result)
     result_with_id["request_id"] = request_id
-    result_with_id["sources"] = hidden_sources
+    result_with_id["sources"] = result_with_id.get("sources", hidden_sources)
     return JsonResponse(result_with_id, status=200)
 
 
@@ -260,3 +271,49 @@ def available_time_slots_view(request):
             },
             status=200,  # 200으로 반환하여 연결 유지
         )
+
+
+@csrf_exempt
+@require_POST
+def skin_analyze_view(request):
+    """피부 이미지 분석 API"""
+    try:
+        # 이미지 파일 확인
+        if 'image' not in request.FILES:
+            return JsonResponse({
+                "error": "이미지 파일이 필요합니다.",
+                "status": "error"
+            }, status=400)
+        
+        image_file = request.FILES['image']
+        
+        # 파일 크기 제한 (10MB)
+        if image_file.size > 10 * 1024 * 1024:
+            return JsonResponse({
+                "error": "이미지 크기는 10MB 이하여야 합니다.",
+                "status": "error"
+            }, status=400)
+        
+        # 이미지 읽기
+        image_bytes = image_file.read()
+        
+        logger.info(f"피부 분석 요청: 파일명={image_file.name}, 크기={image_file.size} bytes")
+        
+        # 피부 분석 서비스 호출
+        skin_service = get_skin_service()
+        result = skin_service.predict(image_bytes)
+        
+        if result.get('status') == 'success':
+            logger.info(f"피부 분석 완료: {result.get('predicted_class')} (신뢰도: {result.get('confidence'):.2%})")
+        else:
+            logger.error(f"피부 분석 실패: {result.get('message')}")
+        
+        return JsonResponse(result, status=200)
+        
+    except Exception as e:
+        logger.error(f"피부 분석 API 오류: {e}", exc_info=True)
+        return JsonResponse({
+            "error": "서버 오류가 발생했습니다.",
+            "status": "error",
+            "message": str(e)
+        }, status=500)

@@ -48,21 +48,36 @@ class ChatRepository {
     print('[ChatRepository] 응답 본문: ${response.body}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(
-        response.statusCode,
-        '챗봇 서버 오류: ${response.body}',
-      );
+      String errMsg = '챗봇 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+      try {
+        final errData = jsonDecode(response.body);
+        if (errData is Map && errData['error'] != null) {
+          errMsg = errData['error'].toString();
+        }
+      } catch (_) {
+        if (response.body.isNotEmpty && response.body.length < 200) {
+          errMsg = response.body;
+        }
+      }
+      throw ApiException(response.statusCode, errMsg);
     }
 
-    final data = jsonDecode(response.body);
+    Map<String, dynamic> data;
+    try {
+      final decoded = jsonDecode(response.body);
+      data = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    } catch (_) {
+      throw ApiException(500, '챗봇 응답 형식이 올바르지 않습니다.');
+    }
 
     print('[ChatRepository] 챗봇 응답: $data');
 
-    if (data is Map<String, dynamic>) {
-      return ChatMessage.fromJson(data);
+    final reply = data['reply'] as String? ?? data['error'] as String?;
+    if (reply == null || reply.isEmpty) {
+      data = Map<String, dynamic>.from(data);
+      data['reply'] = '죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
     }
-
-    throw ApiException(500, '챗봇 응답 형식이 올바르지 않습니다.');
+    return ChatMessage.fromJson(data);
   }
 
   /// 예약 가능 시간 조회

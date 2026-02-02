@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../state/app_state.dart';
 import '../models/chat_message.dart';
 import '../services/chat_repository.dart';
+import '../services/api_client.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -208,10 +209,13 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     } catch (e) {
                       setState(() {
                         _isLoading = false;
+                        final errMsg = e is ApiException
+                            ? e.message
+                            : '죄송합니다. 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.';
                         _messages.add(
                           ChatMessage(
                             id: _uuid.v4(),
-                            message: '죄송합니다. 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.',
+                            message: errMsg,
                             isUser: false,
                             timestamp: DateTime.now(),
                           ),
@@ -221,7 +225,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('오류: $e')),
+                          SnackBar(content: Text('오류: ${e is ApiException ? e.message : e}')),
                         );
                       }
                     }

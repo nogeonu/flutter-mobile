@@ -26,7 +26,7 @@ class ChatMessage {
     
     return ChatMessage(
       id: json['request_id'] as String? ?? '',
-      message: json['reply'] as String? ?? '',
+      message: json['reply'] as String? ?? json['error'] as String? ?? '',
       isUser: false,
       timestamp: DateTime.now(),
       sources: json['sources'] as List<dynamic>?,

@@ -580,7 +580,7 @@ def handle_reservation_followup(
             return payload
         if isinstance(result, dict) and result.get("status") == "error":
             return {
-                "reply": "현재 예약을 처리하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
+                "reply": result.get("reply_text") or "현재 예약을 처리하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
                 "sources": [],
             }
     if not _has_auth_context(metadata):
@@ -773,7 +773,7 @@ def handle_reservation_followup(
                 }
             if result.get("status") == "error":
                 return {
-                    "reply": "현재 예약을 처리하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
+                    "reply": result.get("reply_text") or "현재 예약을 처리하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
                     "sources": [],
                 }
         return {
@@ -1070,7 +1070,7 @@ def handle_reservation_followup(
             }
         if result.get("status") == "error":
             return {
-                "reply": "현재 예약을 처리하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
+                "reply": result.get("reply_text") or "현재 예약을 처리하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
                 "sources": [],
             }
     return {
