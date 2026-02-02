@@ -2608,7 +2608,7 @@ def _reservation_reschedule(args: Dict[str, Any], context: ToolContext | None) -
 
     # original_time으로 변경할 예약을 찾기
     original_time_text = args.get("original_time")
-    
+
     hospital_qs = _get_hospital_reservations_qs()
     if hospital_qs is not None and (hospital_reservation_id or patient_identifier):
         try:
@@ -2635,15 +2635,15 @@ def _reservation_reschedule(args: Dict[str, Any], context: ToolContext | None) -
                 
                 # original_time으로 못 찾았으면 가장 가까운 미래 예약 찾기
                 if not record:
-                    record = (
-                        hospital_qs.filter(
-                            patient_identifier=patient_identifier,
-                            start_time__gte=now,
-                        )
-                        .exclude(status__iexact="cancelled")
-                        .order_by("start_time")
-                        .first()
+                record = (
+                    hospital_qs.filter(
+                        patient_identifier=patient_identifier,
+                        start_time__gte=now,
                     )
+                    .exclude(status__iexact="cancelled")
+                    .order_by("start_time")
+                    .first()
+                )
             if record:
                 base_dt = record.start_time
                 if timezone.is_naive(base_dt):
@@ -3919,7 +3919,7 @@ def _available_time_slots(args: Dict[str, Any], context: ToolContext | None) -> 
         "booked_times": booked_times,
         "available_slots": available_slots,
         "all_slots": all_slots,
-    }
+        }
 
 
 def _session_history(args: Dict[str, Any], context: ToolContext | None) -> Dict[str, Any]:

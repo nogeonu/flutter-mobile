@@ -617,7 +617,7 @@ def handle_reservation_followup(
             }
     # 의료진 선택 프롬프트 체크는 위에서 이미 처리했으므로 여기서는 제거
     # 아래 로직은 의료진 선택 후 날짜/시간 요청 처리
-    tool_context = _build_tool_context(session_id, metadata)
+            tool_context = _build_tool_context(session_id, metadata)
     
     # 의료진 선택 프롬프트가 있었던 경우 의료진 이름 재확인
     if is_doctor_select_prompt(last_bot_answer) or has_doctor_select_context:
@@ -968,26 +968,26 @@ def handle_reservation_followup(
         return {"reply": closed_reply, "sources": []}
 
     if not department:
-        return {"reply": "예약을 위해 진료과를 알려주세요.", "sources": []}
+            return {"reply": "예약을 위해 진료과를 알려주세요.", "sources": []}
     
     # 버튼 클릭 컨텍스트일 때는 의료진 이름 추출을 건너뛰고 바로 의료진 목록 조회
     if has_button_click_context:
         tool_context = _build_tool_context(session_id, metadata)
         doctor_result = execute_tool("doctor_list", {"department": department}, tool_context)
         if isinstance(doctor_result, dict) and doctor_result.get("status") in {"not_found", "error"}:
-            return {
+        return {
                 "reply": doctor_result.get("reply_text")
                 or "해당 진료과 의료진 정보를 찾지 못했습니다. 원하시면 진료과명을 정확히 알려주세요.",
-                "sources": [],
-            }
-        payload = {
-            "reply": f"{department} 의료진을 선택해 주세요. 선택 후 예약을 진행합니다.",
             "sources": [],
         }
+        payload = {
+            "reply": f"{department} 의료진을 선택해 주세요. 선택 후 예약을 진행합니다.",
+                "sources": [],
+            }
         if isinstance(doctor_result, dict) and doctor_result.get("table"):
             payload["table"] = doctor_result["table"]
         return payload
-    
+
     # 진료과는 있지만 의료진이 선택되지 않은 경우 → 의료진 목록 먼저 표시
     doctor_name = _extract_doctor_name(query, metadata)
     

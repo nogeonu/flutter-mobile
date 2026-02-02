@@ -2,8 +2,10 @@ import json
 import logging
 import uuid
 from django.http import JsonResponse
+from django.utils import timezone
+from django.db import connections
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 
 from chatbot.models import ChatMessage
 from chatbot.services.rag import run_rag_with_cache
@@ -260,3 +262,84 @@ def available_time_slots_view(request):
             },
             status=200,  # 200으로 반환하여 연결 유지
         )
+
+
+@csrf_exempt
+@require_GET
+def my_appointments_view(request):
+    """
+    Flutter 마이페이지 "다가오는 일정"용: 환자별 예약 목록 조회.
+    챗봇/병원 DB(patients_appointment)에서 patient_id(또는 patient_identifier)로 조회.
+    Query: ?patient_id=xxx 또는 ?patient_identifier=xxx
+    """
+    patient_id = (
+        request.GET.get("patient_id") or request.GET.get("patient_identifier") or ""
+    ).strip()
+    if not patient_id:
+        return JsonResponse(
+            {"error": "patient_id 또는 patient_identifier가 필요합니다."},
+            status=400,
+        )
+
+    now = timezone.now()
+    results = []
+
+    if "hospital" not in connections.databases:
+        return JsonResponse(results, safe=False)
+
+    try:
+        with connections["hospital"].cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, title, type, start_time, end_time, status, memo,
+                       patient_identifier, patient_name, patient_gender, patient_age,
+                       doctor_id, doctor_code, doctor_username, doctor_name, doctor_department,
+                       created_at, updated_at
+                FROM patients_appointment
+                WHERE patient_identifier = %s
+                  AND LOWER(COALESCE(status, '')) != 'cancelled'
+                  AND start_time >= %s
+                ORDER BY start_time ASC
+                """,
+                [patient_id, now],
+            )
+            rows = cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+
+        for row in rows:
+            r = dict(zip(columns, row))
+            start_time = r.get("start_time")
+            end_time = r.get("end_time")
+            doctor_id = r.get("doctor_id")
+            doctor_name = r.get("doctor_name") or ""
+            doctor_department = r.get("doctor_department") or ""
+            doctor_display = f"{doctor_name} ({doctor_department})" if doctor_department else doctor_name
+
+            results.append({
+                "id": str(r.get("id", "")),
+                "title": r.get("title") or "",
+                "type": r.get("type") or "예약",
+                "start_time": start_time.isoformat() if start_time else "",
+                "end_time": end_time.isoformat() if end_time else None,
+                "status": (r.get("status") or "scheduled").lower()
+                if (r.get("status") or "").lower() in ("scheduled", "completed", "cancelled")
+                else "scheduled",
+                "memo": r.get("memo"),
+                "patient_id": r.get("patient_identifier"),
+                "patient_name": r.get("patient_name"),
+                "patient_gender": r.get("patient_gender"),
+                "patient_age": r.get("patient_age"),
+                "doctor": int(doctor_id) if doctor_id is not None else 0,
+                "doctor_username": r.get("doctor_username") or "",
+                "doctor_name": doctor_name,
+                "doctor_department": doctor_department,
+                "doctor_display": doctor_display,
+                "patient_display": r.get("patient_name"),
+                "created_at": r.get("created_at").isoformat() if r.get("created_at") else None,
+                "updated_at": r.get("updated_at").isoformat() if r.get("updated_at") else None,
+            })
+    except Exception as exc:
+        logger.exception("my_appointments_view: %s", exc)
+        return JsonResponse({"error": str(exc)}, status=500)
+
+    return JsonResponse(results, safe=False)

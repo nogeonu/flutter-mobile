@@ -1602,8 +1602,7 @@ def run_rag(
             # 복합 의도(예: "위치 알려주고 예약해줘")인 경우 조기 리턴하지 않고 아래 메인 로직(RAG+Tool)으로 진행
             if not (has_booking_intent(query) or _is_doctor_query(query) or should_use_tools(query, metadata=metadata)):
                 store = get_vector_store()
-                all_meta = list(store._metadata.values())
-                trusted_meta = _filter_trusted_info_meta(all_meta)
+ 
                 trusted_contexts = [extract_context_text(meta) for meta in trusted_meta]
                 trusted_contexts = [txt for txt in trusted_contexts if txt]
                 static_answer = get_static_answer(query, trusted_contexts, trusted_meta)
