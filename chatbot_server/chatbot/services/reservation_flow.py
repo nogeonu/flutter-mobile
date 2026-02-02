@@ -115,9 +115,38 @@ def handle_reservation_followup(
     session_id: str | None,
     metadata: Dict[str, Any] | None,
 ) -> dict | None:
+    # 예약 내역 조회만 요청한 경우 session_id 없이도 처리 (metadata에 patient_id 있으면 됨)
+    # "예약내역 보여줘" 등 첫 메시지에서도 예약 내역이 나오도록 함
+    if any(cue in query for cue in RESERVATION_HISTORY_CUES):
+        if not _has_auth_context(metadata):
+            return {"reply": AUTH_REQUIRED_REPLY, "sources": []}
+        has_time = _has_time_or_date_hint(query) or any(
+            marker in query for marker in RESCHEDULE_TIME_KEEP_CUES
+        )
+        has_explicit_department = _extract_department(query, None) is not None
+        if not (
+            has_time
+            or has_reschedule_cue(query)
+            or has_doctor_change_cue(query)
+            or has_explicit_department
+        ):
+            tool_context = _build_tool_context(session_id, metadata)
+            result = execute_tool("reservation_history", {}, tool_context)
+            if isinstance(result, dict) and result.get("reply_text"):
+                payload = {"reply": result["reply_text"], "sources": []}
+                if result.get("table"):
+                    payload["table"] = result["table"]
+                return payload
+            if isinstance(result, dict) and result.get("status") == "error":
+                return {
+                    "reply": "현재 예약 내역을 확인하기 어렵습니다. 잠시 후 다시 시도해 주세요.",
+                    "sources": [],
+                }
+            return None
+
     if not session_id:
         return None
-    
+
     # 이전 메시지 확인 (의료진 선택 프롬프트 체크를 위해)
     last_message = (
         ChatMessage.objects.filter(session_id=session_id)
@@ -975,15 +1004,15 @@ def handle_reservation_followup(
         tool_context = _build_tool_context(session_id, metadata)
         doctor_result = execute_tool("doctor_list", {"department": department}, tool_context)
         if isinstance(doctor_result, dict) and doctor_result.get("status") in {"not_found", "error"}:
-        return {
+            return {
                 "reply": doctor_result.get("reply_text")
                 or "해당 진료과 의료진 정보를 찾지 못했습니다. 원하시면 진료과명을 정확히 알려주세요.",
-            "sources": [],
-        }
-        payload = {
-            "reply": f"{department} 의료진을 선택해 주세요. 선택 후 예약을 진행합니다.",
                 "sources": [],
             }
+        payload = {
+            "reply": f"{department} 의료진을 선택해 주세요. 선택 후 예약을 진행합니다.",
+            "sources": [],
+        }
         if isinstance(doctor_result, dict) and doctor_result.get("table"):
             payload["table"] = doctor_result["table"]
         return payload
